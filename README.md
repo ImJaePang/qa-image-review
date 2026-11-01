@@ -8,7 +8,7 @@ AI가 생성한 이미지를 사전 검증한 뒤, QA 담당자가 화면에서 
 frontend/   React + Vite + TypeScript + Tailwind + shadcn/ui (목 데이터로 동작)
 backend/    (예정) Node.js + PostgreSQL
 db/init/    스키마·시드 SQL (컨테이너 최초 기동 시 자동 실행)
-docs/       기획서
+docs/       기획서(plan.md), 설계·진행 기록(design.md)
 ```
 
 ## 실행 (프론트엔드)
@@ -18,6 +18,14 @@ npm install
 npm run dev
 ```
 데모 계정: `admin@example.com`(관리자), `qa1@example.com`(QA) / 비밀번호 `1234`
+
+## 다음에 이어서 할 일 (여기서부터 재개)
+1. **목 이미지/모델 결과 생성 스크립트** — 프론트 목 데이터와 같은 형태(5장 JSON 계약)의 파일 생성. 배정 1건에 3천 장 규모까지 만들 수 있게.
+2. **JSON → DB 적재 스크립트** — `images`, `model_runs`, `detections`, `verdicts` 채우기.
+3. 백엔드 API(Node.js): 로그인, 배정 목록/상세, 신규 배정, 상태 변경, 검수 저장, 이미지 페이지 조회.
+4. 프론트의 `src/mock/api.ts`를 `fetch`로 교체 (함수 시그니처 유지), 이미지 목록은 서버 페이지네이션 + 가상 스크롤.
+
+자세한 설계와 이유는 [docs/design.md](docs/design.md) 참고.
 
 ## 진행 현황
 - [x] 프론트엔드 목업: 로그인/회원가입, 레이아웃(상단·좌측·우측), 배정 리스트, 신규 배정 모달, 배정 상세(이미지 검수·이력)

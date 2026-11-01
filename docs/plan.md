@@ -107,6 +107,8 @@ AI 생성 이미지가 실제 모습과 괴리가 있으면 안 되는데, 수�
 
 ## 6. DB 설계 초안 (PostgreSQL)
 
+> 이 절은 초안이다. 이후 배정/사용자/이력/배치 테이블이 추가되고 `reviews`가 바뀌었다. **최종 설계는 [design.md](design.md)와 `db/init/01_schema.sql` 참고.**
+
 - `images`: id, file_name, width, height, original_path, preview_path
 - `model_runs`: id, image_id, model_version, overall_score, heatmap_path, created_at
 - `detections`: id, run_id, x, y, width, height, score, reason_code
@@ -130,6 +132,8 @@ AI 생성 이미지가 실제 모습과 괴리가 있으면 안 되는데, 수�
 ---
 
 ## 8. 진행 단계 (체크리스트)
+
+> 진행 상황은 루트 README와 [design.md](design.md)를 기준으로 본다. (프론트 목업과 DB 스키마는 완료, 아래 체크박스는 기획 당시 원문)
 
 ### 1단계: 데이터 준비
 - [ ] ComfyUI로 정상 이미지 생성
