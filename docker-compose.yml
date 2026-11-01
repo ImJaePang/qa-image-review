@@ -1,0 +1,24 @@
+services:
+  db:
+    image: postgres:16
+    container_name: qa-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # 데이터 디렉터리가 비어 있는 최초 기동 때만 실행된다 (스키마 변경 시: docker compose down -v)
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # backend:   # 백엔드(Node.js) 작성 후 추가 예정
+
+volumes:
+  pgdata:
