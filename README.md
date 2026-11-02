@@ -24,13 +24,18 @@ npm run dev
 **지금 진행 중인 큰 작업: 파일 수신 시 사전 검증.** 결정과 이유는 [docs/design.md](docs/design.md) 8장, 개념 설명은 [docs/study-notes.md](docs/study-notes.md).
 요약: 폴더 감시(inbox → processing → done/failed, 파일 이동) → 별도 워커가 1장씩 순차 추론 → 판정. 사전배치(PRECHECKED) 상태는 없앤다. 같은 파일 재수신은 막지 않고 새 행으로 쌓되 `origin_image_id`로 연결.
 
-구현 순서:
-1. [x] DB 마이그레이션(`images` 컬럼, `ingest_batches`, `integrations`, 공통 컬럼 소급) + 모델 어댑터 인터페이스(계약 검증) + 목 구현 (커밋 3ef6f0d)
-2. [x] `scanOnce`/`processOne`/`runCycle` + 워커 프로세스(`npm run worker`) + 테스트 25개 (구현 메모: design.md 8장 끝)
-3. [ ] PRECHECKED 제거 (백엔드 `TRANSITIONS`·배정 생성, 프론트 단계/카드/`mappers.ts`, 소요 시간 화면, 테스트)
-4. [ ] 관리자 `연계 관리` 화면 (연계 설정·추가가 목적. 화면 구성은 목업을 먼저 보여주고 사용자와 정한다)
+구현 순서 (각 단계마다 테스트 통과 후 커밋, 결정과 이유는 design.md 9장):
+1. [x] DB 마이그레이션 + 모델 어댑터 계약/목 구현 (3ef6f0d)
+2. [x] `scanOnce`/`processOne`/`runCycle` + 워커 (`npm run worker`) (c6d3efc)
+3. [x] ① 워커 단일 실행 잠금 + 시작 시 고아 파일·PROCESSING 정리
+4. [ ] ② 이미지 ID 기반 파일 API (`/api/images/:key/thumb|preview|original|heatmap`), 이미지 단위 권한, 보안/캐시 헤더. 기존 `/files` 제거
+5. [ ] ③ ComfyUI로 실제 원본 이미지 생성 스크립트 (300~500장, 정답 박스 포함). ComfyUI는 `H:\jjal\ComfyUI\ComfyUI_windows_portable` (`run_comfyui.bat`, 포트 8188), 모델은 `ComfyUI\models`
+6. [ ] ④ 썸네일·미리보기(webp) 생성 (비율 유지) — 추론 후 `thumb_path`/`preview_path` 채움
+7. [ ] ⑤ 검수 화면: 보기 모드 토글(미리보기/원본 고정, 이웃 미리 받기) + 마지막 검수자·시각 표시 (`reviewerName`/`reviewedAt`은 API에 이미 있음)
+8. [ ] ⑥ PRECHECKED 제거 (백엔드 `TRANSITIONS`·배정 생성, 프론트 단계/카드/`mappers.ts`, 소요 시간 화면, 테스트) + 신규 배정에 `ingest_status='DONE'` 조건 명시와 테스트
+9. [ ] ⑦ 관리자 `연계 관리` 화면 (목업을 먼저 보여주고 사용자와 정한다)
 
-확정된 선택(2026-11-02): 공통 컬럼은 기존 테이블에도 소급 적용(쌓기 전용 테이블 제외), 같은 원본의 재수신 행은 신규 배정에서 함께 담기 허용(화면에 "재수신" 표시), 마이그레이션은 SQL 파일 순서 적용.
+확정된 선택(2026-11-02): 공통 컬럼은 기존 테이블에도 소급(쌓기 전용 제외), 재수신 행은 신규 배정에서 함께 담기 허용(화면에 "재수신" 표시), 마이그레이션은 SQL 파일 순서 적용, 원본 열람 기록은 불필요.
 
 그 다음 후보: 규칙 관리 API(rules 수정·재판정), 썸네일 생성. 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 design.md 6장.
 
@@ -49,7 +54,8 @@ npm run dev
 - [x] 모니터링 페이지(소요 시간 분석): 담당자별 검수 속도, 배정별 소요, 모델 처리 시간, 사전배치 기록 (`/monitoring/time`, 관리자 전용)
 - [x] 파일 수신 사전 검증 1단계: 마이그레이션 체계(`npm run migrate`), 수신 상태 컬럼, 연계/수신 배치 테이블, 모델 어댑터 계약 검증 + 목 어댑터
 - [x] 파일 수신 사전 검증 2단계: 폴더 스캔(안정 판정, 매직바이트, 해시 연결), 순차 추론, 실패 격리, 워커 (`npm run worker`)
-- [ ] 파일 수신 사전 검증 3~4단계 (위 구현 순서)
+- [x] 워커 단일 실행 잠금(advisory lock), 시작 시 고아 파일·PROCESSING 정리
+- [ ] 파일 수신 사전 검증 후속 (위 구현 순서 4~9)
 - [ ] (선택) 실제 모델 연동
 
 ## 전체 실행 (개발)
@@ -66,7 +72,7 @@ cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api, /file
 
 ## 테스트
 ```
-cd backend && npm test      # 백엔드 테스트 79개 (API 통합, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
+cd backend && npm test      # 백엔드 테스트 89개 (API 통합, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
 cd frontend && npm test     # 단위 테스트 (영문 코드↔한글 매핑 등)
 cd frontend && npx tsc -b   # 타입 체크
 ```
