@@ -7,6 +7,7 @@ import { pool } from './db.mjs'
 import authRoutes from './routes/auth.mjs'
 import assignmentRoutes from './routes/assignments.mjs'
 import imageRoutes from './routes/images.mjs'
+import monitoringRoutes from './routes/monitoring.mjs'
 
 export async function buildApp(opts = {}) {
   const app = Fastify({ logger: opts.logger ?? false })
@@ -45,6 +46,7 @@ export async function buildApp(opts = {}) {
   await app.register(authRoutes, { prefix: '/api' })
   await app.register(assignmentRoutes, { prefix: '/api' })
   await app.register(imageRoutes, { prefix: '/api' })
+  await app.register(monitoringRoutes, { prefix: '/api' })
 
   // 이미지/히트맵 파일: 로그인한 사용자만
   await app.register(async (scope) => {

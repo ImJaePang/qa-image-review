@@ -4,6 +4,7 @@ import { get, post, put } from './client'
 import {
   REVIEW_CODE,
   STATUS_CODE,
+  STATUS_KO,
   VERDICT_CODE,
   VERDICT_KO,
   toAssignment,
@@ -15,6 +16,46 @@ import {
   type StatusCode,
   type VerdictCode,
 } from './mappers'
+
+export interface TimeAnalysis {
+  gapMinutes: number
+  reviewers: {
+    id: string
+    name: string
+    decisions: number
+    images: number
+    overturned: number
+    timedDecisions: number
+    idleGaps: number
+    activeSeconds: number
+    avgSecondsPerImage: number | null
+    medianSecondsPerImage: number | null
+  }[]
+  assignments: {
+    id: string
+    title: string
+    status: AssignmentStatus
+    assignee: string
+    totalImages: number
+    reviewed: number
+    reviewSeconds: number | null
+    activeSeconds: number
+    avgSecondsPerImage: number | null
+    avgActiveSecondsPerImage: number | null
+    leadSeconds: number | null
+  }[]
+  models: { modelVersion: string; runs: number; avgMs: number; p95Ms: number; maxMs: number }[]
+  batches: {
+    assignmentId: string
+    modelVersion: string
+    status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+    total: number
+    processed: number
+    failed: number
+    seconds: number | null
+    secondsPerImage: number | null
+  }[]
+}
 
 export type ImageFilter = 'all' | 'unreviewed' | 'approved' | 'rejected'
 
@@ -69,6 +110,13 @@ export const api = {
   /** afterPosition(1부터) 다음의 첫 미검토 이미지 위치. 없으면 처음부터 다시 찾고, 전부 검토했으면 null */
   nextUnreviewed: (id: string, afterPosition: number) =>
     get<{ position: number | null }>(`/assignments/${id}/next-unreviewed?after=${afterPosition}`).then((r) => r.position),
+  // ── 모니터링 (관리자) ──
+  async timeAnalysis(gapMinutes: number) {
+    const r = await get<Omit<TimeAnalysis, 'assignments'> & { assignments: (Omit<TimeAnalysis['assignments'][number], 'status'> & { status: StatusCode })[] }>(
+      `/monitoring/time?gapMinutes=${gapMinutes}`,
+    )
+    return { ...r, assignments: r.assignments.map((a) => ({ ...a, status: STATUS_KO[a.status] })) } as TimeAnalysis
+  },
   reviewImage: (id: string, imageId: string, status: '승인' | '반려', comment: string) =>
     put<{ progress: { reviewed: number; approved: number; rejected: number } }>(
       `/assignments/${id}/images/${imageId}/review`,

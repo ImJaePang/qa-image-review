@@ -7,12 +7,13 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { LoginPage, SignupPage } from '@/pages/AuthPages'
 import { AssignmentListPage } from '@/pages/AssignmentListPage'
 import { Placeholder } from '@/pages/Placeholder'
-import { MENU } from '@/config/menu'
+import { IMPLEMENTED, MENU } from '@/config/menu'
+import { TimeAnalysisPage } from '@/pages/TimeAnalysisPage'
 import { useAuth } from '@/stores/auth'
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } })
 const placeholderPaths = MENU.flatMap((m) => m.groups.flatMap((g) => g.items.map((i) => i.path))).filter(
-  (p) => p !== '/review/assignments',
+  (p) => !IMPLEMENTED.has(p),
 )
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/signup" element={<SignupPage />} />
             <Route element={<AppLayout />}>
               <Route path="/review/assignments" element={<AssignmentListPage />} />
+              <Route path="/monitoring/time" element={<TimeAnalysisPage />} />
               {placeholderPaths.map((p) => (
                 <Route key={p} path={p} element={<Placeholder />} />
               ))}

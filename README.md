@@ -20,7 +20,7 @@ npm run dev
 데모 계정: `admin@example.com`(관리자), `qa1@example.com`(QA) / 비밀번호 `1234`
 
 ## 다음에 이어서 할 일 (여기서부터 재개)
-1. 모니터링 페이지(소요 시간 분석), 규칙 관리 API(rules 수정·재판정), 썸네일 생성. 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 [docs/design.md](docs/design.md) 6장.
+1. 규칙 관리 API(rules 수정·재판정), 썸네일 생성. 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 [docs/design.md](docs/design.md) 6장.
 
 자세한 설계와 이유는 [docs/design.md](docs/design.md) 참고.
 
@@ -32,7 +32,7 @@ npm run dev
 - [x] 백엔드 API (Fastify): 인증, 배정 목록/상세/신규/상태 변경/점검 내용, 이미지 페이지 조회, 검수 저장, 파일 서빙 (`cd backend && npm run dev`, 포트 3000)
 - [ ] 규칙 관리 API(rules 테이블 수정·재판정), 썸네일 생성
 - [x] 프론트를 실제 API로 교체, 3천 장 대응 (서버 페이지네이션 + 가상 스크롤 + 낙관적 업데이트). 3천 장 배정 생성→사전배치→점검→검수 흐름을 브라우저로 확인 (`captures/2026-11-02_v0.2-api-connected`)
-- [ ] 모니터링 페이지(소요 시간 분석)
+- [x] 모니터링 페이지(소요 시간 분석): 담당자별 검수 속도, 배정별 소요, 모델 처리 시간, 사전배치 기록 (`/monitoring/time`, 관리자 전용)
 - [ ] (선택) 실제 모델 연동
 
 ## 전체 실행 (개발)
@@ -47,7 +47,7 @@ cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api, /file
 
 ## 테스트
 ```
-cd backend && npm test      # API 통합 테스트 31개 (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
+cd backend && npm test      # API 통합 테스트 41개 (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
 cd frontend && npm test     # 단위 테스트 (영문 코드↔한글 매핑 등)
 cd frontend && npx tsc -b   # 타입 체크
 ```

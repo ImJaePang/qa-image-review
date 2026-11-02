@@ -57,8 +57,8 @@ Vite 8 + React 19 + TypeScript(7) + Tailwind v4 + shadcn/ui(Base UI 기반) + Re
 - 서버 에러 메시지가 한글 문장이다 (다국어 시 에러 코드 방식으로 변경 필요, 6장).
 
 ### 테스트 현황
-- 백엔드: `backend/test/api.test.mjs`(인증, 배정 생성~확인 완료 흐름, 권한, 검수 번복, 다음 미검토, 파일 접근), `rules.test.mjs`(판정 경계값). 31개.
-- 프론트: `src/api/mappers.test.ts`. 서버 코드와 화면 값이 어긋나면 먼저 깨지게 하는 용도.
+- 백엔드: `backend/test/api.test.mjs`(인증, 배정 생성~확인 완료 흐름, 권한, 검수 번복, 다음 미검토, 파일 접근), `monitoring.test.mjs`(시각을 직접 넣어 소요 시간 계산 검증: 자리 비움 제외, 담당자 간 간섭 없음, 기준 변경, null 처리, p95), `rules.test.mjs`(판정 경계값). 41개.
+- 프론트: `src/api/mappers.test.ts`, `src/lib/format.test.ts`(시간 표기). 10개. 서버 코드와 화면 값이 어긋나면 먼저 깨지게 하는 용도.
 - 없는 것: 화면(브라우저) 자동 테스트, 컴포넌트 테스트, 부하 테스트. 화면은 지금까지 수동 스크립트로 확인했고 저장소에는 없다.
 - 변경 영향 파악 순서: `npx tsc -b`(타입 불일치) → `npm test` 두 곳 → 필요 시 화면 확인.
 
@@ -116,6 +116,7 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 | PUT /api/assignments/:code/note | 점검 내용 저장 | 담당자·관리자 |
 | GET /api/assignments/:code/images?filter&verdict&page&pageSize | 서버 페이지네이션(최대 200). filter: all/unreviewed/approved/rejected | 로그인 |
 | PUT /api/assignments/:code/images/:imageKey/review | 승인/반려 저장. 점검중일 때만 | 담당자·관리자 |
+| GET /api/monitoring/time?gapMinutes=5 | 소요 시간 분석(담당자별·배정별·모델·사전배치). 자리 비움 기준 1~120분 | 관리자 |
 | GET /files/... | 이미지·히트맵 파일(`data/images`) | 로그인 |
 
 - 단계별 권한은 2장 표와 같다 (사전배치 실행·확인 완료는 관리자, 점검 시작·완료는 담당자 또는 관리자).
@@ -127,6 +128,14 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 - 검증: `backend/test/`의 통합 테스트(`npm test`)가 권한·상태 전이·검수·페이지네이션·파일 접근을 확인한다. 테스트 전용 DB를 매번 새로 만들어 스키마·시드를 적용하므로 개발 DB와 섞이지 않는다.
 - `GET /api/assignments/:code/next-unreviewed?after=N`: N번째 뒤의 첫 미검토 위치(없으면 처음부터, 전부 검토했으면 null). 이어서 검수할 때 화면이 첫 미검토로 바로 이동하는 데 쓴다.
 - 알려진 한계: 로그인 시도 횟수 제한 없음, npm audit에 `@fastify/static`의 glob 의존성 관련 moderate 경고 1건(와일드카드 기능을 쓰지 않음).
+
+### 소요 시간 분석 계산 기준 (`routes/monitoring.mjs`)
+- **담당자별 이미지당 시간**: 같은 담당자·같은 배정에서 연속된 `reviews.decided_at` 간격. 기준(기본 5분) 초과 간격은 자리 비움으로 보고 평균/실작업 시간에서 제외하고 "자리 비움 구간" 수로 따로 센다. 다른 담당자의 검수가 사이에 끼어도 서로의 간격에 영향이 없다(담당자·배정 단위로 계산).
+- **번복**: 같은 이미지를 다시 판정한 행도 하나의 작업 간격으로 계산하고, 건수는 `번복 = 판정 횟수 - 이미지 수`로 따로 보여 준다.
+- **배정별**: (점검 시작 ~ 점검 완료 시각, `assignment_history`) ÷ 검수한 이미지 수 = 평균/장. 실작업/장은 자리 비움을 뺀 값. 배정~확인은 ASSIGNED ~ CONFIRMED. 아직 끝나지 않은 단계는 null.
+- **모델**: `model_runs.duration_ms`의 평균/p95/최대(버전별). **사전배치**: `batch_jobs` 시작·종료 시각, 끝나지 않은 건은 null.
+- 첫 검수는 직전 기준이 없어 간격에 포함되지 않는다. 점검 시작 직후 첫 이미지를 보는 시간은 배정별 평균(점검 시작 기준)에만 반영된다.
+- 한계: 한 번에 많은 이미지를 승인하는 일괄 처리가 생기면 간격이 매우 짧게 잡힌다. 현재 화면에는 일괄 처리가 없다.
 
 ## 4. 개발 환경 메모
 - 저장소: 루트 하나에 프론트/백엔드/DB를 함께 두는 모노레포 (혼자 진행, JSON 계약 공유, compose 하나로 기동).
@@ -164,3 +173,4 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 - `2026-11-02_v0.1-mock-ui`: 목 데이터 기반 프론트 목업 8장 (로그인, 회원가입, 배정 리스트, 신규 배정, 상세 3탭, 다크 모드).
 - `2026-11-02_v0.2-api-connected`: 실제 API 연동 후 화면 9장 (빈 목록, 3천 장 신규 배정, 사전배치, 이미지 검수·가상 스크롤·새로고침 후 유지, 진행률).
 - `2026-11-02_v0.3-resume-review`: 이어서 검수(첫 미검토로 열기), 멀리 스크롤 후 해당 페이지만 로드.
+- `2026-11-02_v0.4-time-analysis`: 소요 시간 분석 화면 (QA 접근 차단, 5분 기준, 15분 기준 비교).

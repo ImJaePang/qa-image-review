@@ -42,6 +42,11 @@ export const MENU: TopMenu[] = [
     ],
   },
   {
+    key: 'monitoring',
+    label: '모니터링',
+    groups: [{ label: '분석', items: [{ label: '소요 시간 분석', path: '/monitoring/time' }] }],
+  },
+  {
     key: 'settings',
     label: '설정',
     groups: [
@@ -51,7 +56,7 @@ export const MENU: TopMenu[] = [
   },
 ]
 
-export const IMPLEMENTED = new Set(['/review/assignments'])
+export const IMPLEMENTED = new Set(['/review/assignments', '/monitoring/time'])
 
 export function topKeyOfPath(pathname: string) {
   return MENU.find((m) => pathname.startsWith(`/${m.key}`))?.key ?? MENU[0].key
