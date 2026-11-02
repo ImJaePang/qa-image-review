@@ -20,7 +20,20 @@ npm run dev
 데모 계정: `admin@example.com`(관리자), `qa1@example.com`(QA) / 비밀번호 `1234`
 
 ## 다음에 이어서 할 일 (여기서부터 재개)
-1. 규칙 관리 API(rules 수정·재판정), 썸네일 생성. 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 [docs/design.md](docs/design.md) 6장.
+**지금 진행 중인 큰 작업: 파일 수신 시 사전 검증 (설계 완료, 구현 시작 전).** 결정과 이유는 [docs/design.md](docs/design.md) 8장, 개념 설명은 [docs/study-notes.md](docs/study-notes.md).
+요약: 폴더 감시(inbox → processing → done/failed, 파일 이동) → 별도 워커가 1장씩 순차 추론 → 판정. 사전배치(PRECHECKED) 상태는 없앤다. 같은 파일 재수신은 막지 않고 새 행으로 쌓되 `origin_image_id`로 연결.
+
+구현 순서 (각 단계마다 테스트 통과 후 커밋):
+1. DB 마이그레이션(`images` 컬럼, `ingest_batches`, `integrations`) + 모델 어댑터 인터페이스 + 목 구현
+2. `scanOnce`/`processOne` + 워커 프로세스(`npm run worker`) + 테스트
+3. PRECHECKED 제거 (백엔드 `TRANSITIONS`·배정 생성, 프론트 단계/카드/`mappers.ts`, 소요 시간 화면, 테스트)
+4. 관리자 `연계 관리` 화면 (연계 설정·추가가 목적. 화면 구성은 목업을 먼저 보여주고 사용자와 정한다)
+
+시작 전 사용자에게 확인할 것: (a) 공통 컬럼(id, 등록자, 등록일시, 수정자, 수정일시) 적용 범위 — 새 테이블만/기존 포함, (b) 같은 원본의 재수신 행을 신규 배정에서 함께 담을지(기본: 허용), (c) 마이그레이션 도구(직접 SQL 파일 순서 적용 권장). 그 밖에는 설계 8장대로 진행해도 된다.
+
+그 다음 후보: 규칙 관리 API(rules 수정·재판정), 썸네일 생성. 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 design.md 6장.
+
+새 세션 시작: `README.md 읽고 이어서 해줘` 한 줄이면 된다 (CLAUDE.md가 README → design.md 순서로 읽도록 안내함).
 
 자세한 설계와 이유는 [docs/design.md](docs/design.md) 참고.
 
