@@ -45,6 +45,14 @@ cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api, /file
 처음이면 `npm run generate-mock`을 먼저 실행해 `data/images/`를 만든다.
 엔드포인트 요약은 [docs/design.md](docs/design.md) 3-1장.
 
+## 테스트
+```
+cd backend && npm test      # API 통합 테스트 31개 (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
+cd frontend && npm test     # 단위 테스트 (영문 코드↔한글 매핑 등)
+cd frontend && npx tsc -b   # 타입 체크
+```
+개발 DB(`qa_review`)는 테스트가 건드리지 않는다. 화면(브라우저) 자동 테스트는 아직 없다.
+
 ## DB 실행
 ```
 cp .env.example .env     # 비밀번호 수정

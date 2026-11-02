@@ -82,6 +82,31 @@ export default async function imageRoutes(app) {
     },
   )
 
+  // 다음 미검토 이미지 위치(position, 1부터). after 뒤에서 찾고 없으면 처음부터 다시 찾는다.
+  app.get(
+    '/assignments/:code/next-unreviewed',
+    {
+      schema: {
+        params: codeParam,
+        querystring: { type: 'object', properties: { after: { type: 'integer', minimum: 0, default: 0 } } },
+      },
+    },
+    async (req) => {
+      const a = await findAssignment(pool, req.params.code)
+      const find = (after) =>
+        pool.query(
+          `SELECT ai.position FROM assignment_images ai
+           WHERE ai.assignment_id = $1 AND ai.position > $2
+             AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.assignment_id = ai.assignment_id AND r.image_id = ai.image_id)
+           ORDER BY ai.position LIMIT 1`,
+          [a.id, after],
+        )
+      let r = await find(req.query.after)
+      if (!r.rowCount && req.query.after > 0) r = await find(0)
+      return { position: r.rows[0]?.position ?? null }
+    },
+  )
+
   // 검수 저장 (승인/반려). 판정을 바꾸면 행이 추가되고 최신 행이 현재 상태가 된다.
   app.put(
     '/assignments/:code/images/:imageKey/review',

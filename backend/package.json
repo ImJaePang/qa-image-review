@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node --env-file=../.env --watch src/server.mjs",
     "start": "node --env-file=../.env src/server.mjs",
+    "test": "node --env-file=../.env --test --test-concurrency=1 \"test/**/*.test.mjs\"",
     "generate-mock": "node scripts/generate-mock.mjs",
     "load-mock": "node --env-file=../.env scripts/load-results.mjs"
   },

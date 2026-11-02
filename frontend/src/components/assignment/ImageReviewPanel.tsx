@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Check, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, SkipForward, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -58,91 +58,119 @@ function ImageViewer({ img, overlay, opacity }: { img: ImageItem; overlay: Overl
 
 export function ImageReviewPanel({ assignment, canReview }: { assignment: Assignment; canReview: boolean }) {
   const qc = useQueryClient()
-  const imagesKey = ['images', assignment.id]
-
-  // 서버 페이지네이션: 앞에서부터 50장씩 불러온다 (순서는 서버가 점수 낮은 순으로 정해 둠)
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isError, error } = useInfiniteQuery({
-    queryKey: imagesKey,
-    initialPageParam: 1,
-    queryFn: ({ pageParam }) => api.listImages(assignment.id, { page: pageParam, pageSize: PAGE_SIZE }),
-    getNextPageParam: (last) => (last.page * last.pageSize < last.total ? last.page + 1 : undefined),
-  })
-  const items = data?.pages.flatMap((p) => p.items) ?? []
-  const total = data?.pages[0]?.total ?? 0
+  const aid = assignment.id
+  const pageOf = (i: number) => Math.floor(i / PAGE_SIZE) + 1
 
   const [index, setIndex] = useState(0)
   const [overlay, setOverlay] = useState<Overlay>('both')
   const [opacity, setOpacity] = useState(60)
   const [draft, setDraft] = useState<{ id: string; text: string } | null>(null)
 
-  const current = items[Math.min(index, items.length - 1)]
+  // 가상 스크롤 목록: 전체 장수만큼 행을 잡고, 보이는 행이 속한 페이지(50장 단위)만 서버에서 불러온다.
+  const listRef = useRef<HTMLDivElement>(null)
+  const [total, setTotal] = useState(assignment.counts.total)
+  const virt = useVirtualizer({
+    count: total,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+  })
+  const virtualRows = virt.getVirtualItems()
+  const firstVisible = virtualRows[0]?.index ?? 0
+  const lastVisible = virtualRows[virtualRows.length - 1]?.index ?? 0
+
+  // 지금 필요한 페이지: 보이는 범위 + 현재 이미지(앞뒤 한 장 포함)
+  const needed = [...new Set([1, pageOf(firstVisible), pageOf(lastVisible), pageOf(index), pageOf(index + 1)])]
+    .filter((p) => p >= 1 && (total === 0 || (p - 1) * PAGE_SIZE < total))
+    .sort((x, y) => x - y)
+  const results = useQueries({
+    queries: needed.map((p) => ({
+      queryKey: ['images', aid, p],
+      queryFn: () => api.listImages(aid, { page: p, pageSize: PAGE_SIZE }),
+      placeholderData: (prev: ImagePage | undefined) => prev,
+    })),
+  })
+  const pages = new Map<number, ImagePage>()
+  needed.forEach((p, i) => {
+    const d = results[i]?.data
+    if (d && d.page === p) pages.set(p, d)
+  })
+  const firstError = results.find((r) => r.isError)?.error as Error | undefined
+  const serverTotal = pages.get(1)?.total
+  useEffect(() => {
+    if (serverTotal !== undefined && serverTotal !== total) setTotal(serverTotal)
+  }, [serverTotal, total])
+
+  const itemAt = (i: number): ImageItem | undefined => pages.get(pageOf(i))?.items[i % PAGE_SIZE]
+  const lastShown = useRef<ImageItem | undefined>(undefined)
+  const at = itemAt(Math.min(index, Math.max(total - 1, 0)))
+  if (at) lastShown.current = at
+  const current = at ?? lastShown.current // 다른 페이지를 불러오는 동안은 직전 이미지를 보여 준다
   const review = current?.review
   const comment = draft && current && draft.id === current.imageId ? draft.text : (review?.comment ?? '')
 
-  // 가상 스크롤 목록: 화면에 보이는 행만 그린다. 끝에 가까워지면 다음 페이지를 불러온다.
-  const listRef = useRef<HTMLDivElement>(null)
-  const rowCount = items.length + (hasNextPage ? 1 : 0)
-  const virt = useVirtualizer({
-    count: rowCount,
-    getScrollElement: () => listRef.current,
-    estimateSize: () => ROW_HEIGHT,
-    overscan: 8,
-  })
-  const virtualRows = virt.getVirtualItems()
-  const lastVisible = virtualRows[virtualRows.length - 1]?.index ?? -1
   useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage && lastVisible >= items.length - 1) fetchNextPage()
-  }, [lastVisible, items.length, hasNextPage, isFetchingNextPage, fetchNextPage])
-  useEffect(() => {
-    if (items.length) virt.scrollToIndex(Math.min(index, items.length - 1), { align: 'auto' })
+    if (total) virt.scrollToIndex(Math.min(index, total - 1), { align: 'auto' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index])
 
+  // 처음 열 때 첫 미검토 이미지로 이동 (이어서 작업하는 경우)
+  const started = useRef(false)
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
+    api.nextUnreviewed(aid, 0).then((pos) => pos && setIndex(pos - 1)).catch(() => undefined)
+  }, [aid])
+
+  const goNextUnreviewed = async (afterPosition: number) => {
+    try {
+      const pos = await api.nextUnreviewed(aid, afterPosition)
+      if (pos) setIndex(pos - 1)
+      else toast.info('미검토 이미지가 없습니다.')
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
+
   // 낙관적 업데이트: 저장 요청을 보내면서 화면은 바로 반영하고, 실패하면 되돌린다
+  const patchReview = (imageId: string, review: ImageItem['review']) => {
+    const prev = qc.getQueriesData<ImagePage>({ queryKey: ['images', aid] })
+    prev.forEach(([key, data]) => {
+      if (!data) return
+      qc.setQueryData<ImagePage>(key, { ...data, items: data.items.map((i) => (i.imageId === imageId ? { ...i, review } : i)) })
+    })
+    return prev
+  }
   const mutate = useMutation({
     mutationFn: (v: { imageId: string; status: '승인' | '반려'; comment: string }) =>
-      api.reviewImage(assignment.id, v.imageId, v.status, v.comment),
+      api.reviewImage(aid, v.imageId, v.status, v.comment),
     onMutate: async (v) => {
-      await qc.cancelQueries({ queryKey: imagesKey })
-      const prev = qc.getQueryData<InfiniteData<ImagePage>>(imagesKey)
-      qc.setQueryData<InfiniteData<ImagePage>>(
-        imagesKey,
-        (old) =>
-          old && {
-            ...old,
-            pages: old.pages.map((p) => ({
-              ...p,
-              items: p.items.map((i) =>
-                i.imageId === v.imageId
-                  ? { ...i, review: { status: v.status, comment: v.comment, reviewedAt: new Date().toISOString() } }
-                  : i,
-              ),
-            })),
-          },
-      )
-      return { prev }
+      await qc.cancelQueries({ queryKey: ['images', aid] })
+      return { prev: patchReview(v.imageId, { status: v.status, comment: v.comment, reviewedAt: new Date().toISOString() }) }
     },
     onError: (e: Error, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(imagesKey, ctx.prev)
+      ctx?.prev.forEach(([key, data]) => qc.setQueryData(key, data))
       toast.error(e.message)
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['assignments'] }),
   })
 
-  const decide = (status: '승인' | '반려') => {
+  const decide = async (status: '승인' | '반려') => {
     if (!canReview || !current) return
-    mutate.mutate({ imageId: current.imageId, status, comment })
+    const saving = mutate.mutateAsync({ imageId: current.imageId, status, comment }).catch(() => undefined)
     setDraft(null)
-    // 다음 미검토 이미지로 이동 (불러온 범위 안에서)
-    const next = items.findIndex((x, i) => i > index && x.review.status === '미검토')
-    if (next >= 0) setIndex(next)
+    // 바로 다음 이미지가 불러와져 있고 미검토면 그대로 이동, 아니면 서버에 다음 미검토 위치를 묻는다
+    const nextItem = itemAt(index + 1)
+    if (nextItem?.review.status === '미검토') return setIndex(index + 1)
+    await saving // 서버가 이번 결과를 저장한 뒤에 물어야 현재 이미지를 건너뛴다
+    goNextUnreviewed(index + 1)
   }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
       if (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT') return
-      if (e.key === 'ArrowRight') setIndex((i) => Math.min(i + 1, items.length - 1))
+      if (e.key === 'ArrowRight') setIndex((i) => Math.min(i + 1, total - 1))
       else if (e.key === 'ArrowLeft') setIndex((i) => Math.max(i - 1, 0))
       else if (e.key.toLowerCase() === 'a') decide('승인')
       else if (e.key.toLowerCase() === 'r') decide('반려')
@@ -152,13 +180,9 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  if (isError) return <p className="p-6 text-sm text-destructive">{(error as Error).message}</p>
-  if (!current)
-    return (
-      <p className="p-6 text-sm text-muted-foreground">
-        {data ? '이 배정에는 이미지가 없습니다.' : '이미지를 불러오는 중…'}
-      </p>
-    )
+  if (firstError && !current) return <p className="p-6 text-sm text-destructive">{firstError.message}</p>
+  if (total === 0) return <p className="p-6 text-sm text-muted-foreground">이 배정에는 이미지가 없습니다.</p>
+  if (!current) return <p className="p-6 text-sm text-muted-foreground">이미지를 불러오는 중…</p>
 
   return (
     <div className="grid h-full min-h-0 grid-cols-[220px_1fr_280px] gap-4">
@@ -166,7 +190,7 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
       <div ref={listRef} className="min-h-0 overflow-auto rounded-lg border">
         <ul className="relative" style={{ height: virt.getTotalSize() }}>
           {virtualRows.map((row) => {
-            const img = items[row.index]
+            const img = itemAt(row.index)
             return (
               <li
                 key={row.key}
@@ -218,11 +242,14 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
             <Slider value={[opacity]} min={0} max={100} onValueChange={(v) => setOpacity(Array.isArray(v) ? v[0] : v)} />
           </div>
           <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+            <Button variant="outline" size="xs" onClick={() => goNextUnreviewed(index + 1)} className="mr-2">
+              <SkipForward className="size-3" /> 다음 미검토
+            </Button>
             <Button variant="ghost" size="icon-sm" onClick={() => setIndex(Math.max(index - 1, 0))} aria-label="이전">
               <ChevronLeft className="size-4" />
             </Button>
             {index + 1} / {total}
-            <Button variant="ghost" size="icon-sm" onClick={() => setIndex(Math.min(index + 1, items.length - 1))} aria-label="다음">
+            <Button variant="ghost" size="icon-sm" onClick={() => setIndex(Math.min(index + 1, total - 1))} aria-label="다음">
               <ChevronRight className="size-4" />
             </Button>
           </div>

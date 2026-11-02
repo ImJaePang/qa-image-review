@@ -66,6 +66,9 @@ export const api = {
     const r = await get<Page<ApiImageItem>>(`/assignments/${id}/images?${qs}`)
     return { ...r, items: r.items.map(toImageItem) as ImageItem[] }
   },
+  /** afterPosition(1부터) 다음의 첫 미검토 이미지 위치. 없으면 처음부터 다시 찾고, 전부 검토했으면 null */
+  nextUnreviewed: (id: string, afterPosition: number) =>
+    get<{ position: number | null }>(`/assignments/${id}/next-unreviewed?after=${afterPosition}`).then((r) => r.position),
   reviewImage: (id: string, imageId: string, status: '승인' | '반려', comment: string) =>
     put<{ progress: { reviewed: number; approved: number; rejected: number } }>(
       `/assignments/${id}/images/${imageId}/review`,
