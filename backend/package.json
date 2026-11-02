@@ -1,0 +1,18 @@
+{
+  "name": "qa-review-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file=../.env --watch src/server.mjs",
+    "start": "node --env-file=../.env src/server.mjs",
+    "generate-mock": "node scripts/generate-mock.mjs",
+    "load-mock": "node --env-file=../.env scripts/load-results.mjs"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/jwt": "^10.2.6",
+    "@fastify/static": "^10.1.8",
+    "fastify": "^5.12.7",
+    "pg": "^8.23.1"
+  }
+}

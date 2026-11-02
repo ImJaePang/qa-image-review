@@ -20,20 +20,27 @@ npm run dev
 데모 계정: `admin@example.com`(관리자), `qa1@example.com`(QA) / 비밀번호 `1234`
 
 ## 다음에 이어서 할 일 (여기서부터 재개)
-1. **목 이미지/모델 결과 생성 스크립트** — 프론트 목 데이터와 같은 형태(5장 JSON 계약)의 파일 생성. 배정 1건에 3천 장 규모까지 만들 수 있게.
-2. **JSON → DB 적재 스크립트** — `images`, `model_runs`, `detections`, `verdicts` 채우기.
-3. 백엔드 API(Node.js): 로그인, 배정 목록/상세, 신규 배정, 상태 변경, 검수 저장, 이미지 페이지 조회.
-4. 프론트의 `src/mock/api.ts`를 `fetch`로 교체 (함수 시그니처 유지), 이미지 목록은 서버 페이지네이션 + 가상 스크롤.
+1. 프론트의 `src/mock/api.ts`를 `fetch`로 교체 (함수 시그니처 유지), 이미지 목록은 서버 페이지네이션 + 가상 스크롤.
 
 자세한 설계와 이유는 [docs/design.md](docs/design.md) 참고.
 
 ## 진행 현황
 - [x] 프론트엔드 목업: 로그인/회원가입, 레이아웃(상단·좌측·우측), 배정 리스트, 신규 배정 모달, 배정 상세(이미지 검수·이력)
 - [x] DB 스키마 + `docker-compose.yml` (Postgres 16, 11개 테이블 + 뷰 2개, 기동/제약 검증 완료)
-- [ ] 백엔드 API (목록/상세/배정/검수), 규칙 층, 썸네일 생성
+- [x] JSON → DB 적재 스크립트: `cd backend && npm install && npm run load-mock` (3천 장 적재 검증, 재실행해도 중복 없음)
+- [x] 목 이미지/모델 결과 생성 스크립트: `node backend/scripts/generate-mock.mjs --count 3000` → `data/images/`(git 제외), `results.jsonl`은 5장 JSON 계약 + originalPath/durationMs
+- [x] 백엔드 API (Fastify): 인증, 배정 목록/상세/신규/상태 변경/점검 내용, 이미지 페이지 조회, 검수 저장, 파일 서빙 (`cd backend && npm run dev`, 포트 3000)
+- [ ] 규칙 관리 API(rules 테이블 수정·재판정), 썸네일 생성
 - [ ] 프론트를 실제 API로 교체, 3천 장 대응(서버 페이지네이션, 가상 스크롤)
 - [ ] 모니터링 페이지(소요 시간 분석)
 - [ ] (선택) 실제 모델 연동
+
+## 백엔드 실행
+```
+cd backend && npm install
+npm run dev      # .env의 JWT_SECRET, API_PORT, POSTGRES_* 사용. 먼저 DB 기동 + npm run load-mock
+```
+엔드포인트 요약은 [docs/design.md](docs/design.md) 3-1장.
 
 ## DB 실행
 ```

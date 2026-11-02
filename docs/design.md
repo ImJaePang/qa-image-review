@@ -9,8 +9,9 @@
 |---|---|---|
 | 프론트엔드 | 목업 완료 | 목 데이터로 전 흐름 동작. 새로고침 시 데이터 초기화 |
 | DB | 스키마 완료 | Postgres 16 + Docker, 기동/제약 검증 완료. 데이터는 시드(계정, 규칙)뿐 |
-| 백엔드 | 미착수 | `backend/` 폴더 없음 |
-| 목 이미지/모델 결과 생성, DB 적재 | 미착수 | 다음 작업 |
+| 백엔드 | API 완료 | Fastify 5 + pg. 프론트 연동은 아직 |
+| 목 이미지/모델 결과 생성 | 완료 | `backend/scripts/generate-mock.mjs`. 시드 고정, 3천 장 약 1초, 20MB |
+| DB 적재 | 완료 | `backend/scripts/load-results.mjs`. rules 테이블의 활성 최신 규칙으로 판정하고 `rule_id` 기록. 이미 있는 image_key는 건너뜀(멱등), 전체 한 트랜잭션. 3천 장: 정상 2081 / 의심 471 / 불량 448 |
 
 ## 2. 프론트엔드 (`frontend/`)
 
@@ -87,6 +88,34 @@ Vite 8 + React 19 + TypeScript(7) + Tailwind v4 + shadcn/ui(Base UI 기반) + Re
   - 이미지별 작업 속도 = 같은 담당자의 연속된 `reviews.decided_at` 간격. 약 5분 이상 벌어진 구간은 자리를 비운 것으로 보고 제외(기준은 쿼리에서 조정).
   - 사전배치 시간 = `batch_jobs`, 모델 1장 시간 = `model_runs.duration_ms`.
 - **인덱스**: `assignment_images(assignment_id, position)`, `reviews(assignment_id, image_id, decided_at DESC)`, `detections(run_id)` 등 3천 장 집계를 염두에 둠.
+
+## 3-1. 백엔드 API (`backend/src`)
+
+Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 검증. 에러 응답은 `{ message }`.
+인증: 로그인 시 JWT를 httpOnly 쿠키(`token`, 12시간)로 발급, `Authorization: Bearer`도 허용. 이미지는 `<img>`가 쿠키를 자동 전송하도록 이 방식을 택했다. 프론트는 Vite 프록시로 같은 출처에서 호출할 것(CORS 불필요).
+
+| 메서드 경로 | 설명 | 권한 |
+|---|---|---|
+| POST /api/auth/login, signup, logout / GET /api/auth/me | 가입은 항상 qa 역할 | - |
+| GET /api/users | 담당자 선택용 | 로그인 |
+| GET /api/assignments?status&q&page&pageSize | 목록 + 상태별 건수 | 로그인 |
+| GET /api/assignments/:code | 상세(건수, 이력, 점검 내용). 이미지는 제외 | 로그인 |
+| GET /api/unassigned-counts | 미배정 이미지 수(판정별) | 로그인 |
+| POST /api/assignments | 신규 배정. 미배정 이미지 자동 선택, 순서는 점수 낮은 순 | 관리자 |
+| POST /api/assignments/:code/status {to} | 정해진 다음 단계로만. 점검 완료는 미검토가 남으면 거부 | 단계별(아래) |
+| PUT /api/assignments/:code/note | 점검 내용 저장 | 담당자·관리자 |
+| GET /api/assignments/:code/images?filter&verdict&page&pageSize | 서버 페이지네이션(최대 200). filter: all/unreviewed/approved/rejected | 로그인 |
+| PUT /api/assignments/:code/images/:imageKey/review | 승인/반려 저장. 점검중일 때만 | 담당자·관리자 |
+| GET /files/... | 이미지·히트맵 파일(`data/images`) | 로그인 |
+
+- 단계별 권한은 2장 표와 같다 (사전배치 실행·확인 완료는 관리자, 점검 시작·완료는 담당자 또는 관리자).
+- 사전배치는 지금은 실제 추론 없이 `batch_jobs`에 성공 기록만 남긴다 (모델 결과는 이미 적재됨). 실제 모델 연동 시 이 부분을 어댑터로 교체.
+- 검수 저장은 직전과 같은 내용이면 행을 추가하지 않는다 (소요 시간 분석 노이즈 방지). 판정을 바꾸면 행 추가.
+- 신규 배정은 `pg_advisory_xact_lock`으로 직렬화해 두 배정이 같은 이미지를 집지 않게 한다.
+- 이미지 항목: 5장 계약 필드 + `verdict`, `reasons`, `thumbUrl/previewUrl/heatmapUrl`, `review{status: NONE|APPROVED|REJECTED}`. 썸네일 생성 전에는 원본 URL을 그대로 돌려준다.
+- 상태·판정 값은 영문 코드로 응답한다. 한글 매핑은 프론트 몫.
+- 검증: `app.inject`로 권한·상태 전이·검수·파일 접근 시나리오를 확인함 (자동 테스트로는 아직 저장소에 없음).
+- 알려진 한계: 로그인 시도 횟수 제한 없음, npm audit에 `@fastify/static`의 glob 의존성 관련 moderate 경고 1건(와일드카드 기능을 쓰지 않음).
 
 ## 4. 개발 환경 메모
 - 저장소: 루트 하나에 프론트/백엔드/DB를 함께 두는 모노레포 (혼자 진행, JSON 계약 공유, compose 하나로 기동).
