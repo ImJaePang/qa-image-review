@@ -7,16 +7,14 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { api } from '@/mock/api'
-import { useAuth, useCurrentUser } from '@/stores/auth'
+import { api } from '@/api'
 import type { Verdict } from '@/lib/types'
 
 const VERDICTS: Verdict[] = ['정상', '의심', '불량']
 
 export function NewAssignmentDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient()
-  const me = useCurrentUser()
-  const users = useAuth((s) => s.users)
+  const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: api.listUsers, enabled: open })
   const qaUsers = users.filter((u) => u.role === 'qa')
 
   const [title, setTitle] = useState('')
@@ -31,7 +29,7 @@ export function NewAssignmentDialog({ open, onOpenChange }: { open: boolean; onO
   const create = useMutation({
     mutationFn: api.createAssignment,
     onSuccess: (a) => {
-      toast.success(`${a.id} 배정 완료 (${a.imageIds.length}장 → ${a.assigneeName})`)
+      toast.success(`${a.id} 배정 완료 (${a.count}장 → ${qaUsers.find((u) => u.id === assigneeId)?.name ?? '-'})`)
       qc.invalidateQueries({ queryKey: ['assignments'] })
       qc.invalidateQueries({ queryKey: ['unassigned'] })
       setTitle('')
@@ -120,7 +118,7 @@ export function NewAssignmentDialog({ open, onOpenChange }: { open: boolean; onO
           </Button>
           <Button
             disabled={!valid || create.isPending}
-            onClick={() => create.mutate({ title: title.trim(), assigneeId, dueDate, verdicts, count, actor: me?.name ?? '-' })}
+            onClick={() => create.mutate({ title: title.trim(), assigneeId, dueDate, verdicts, count })}
           >
             {create.isPending ? '배정 중…' : '배정하기'}
           </Button>

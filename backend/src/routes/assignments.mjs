@@ -102,12 +102,17 @@ export default async function assignmentRoutes(app) {
     )
     if (!rows.length) throw httpError(404, '배정을 찾을 수 없습니다.')
     const r = rows[0]
-    const [rv, hist] = await Promise.all([
+    const [rv, hist, mv] = await Promise.all([
       pool.query(`SELECT status, count(*) AS n FROM review_current WHERE assignment_id = $1 GROUP BY status`, [r.id]),
       pool.query(
         `SELECT h.at, h.action, COALESCE(u.name, '시스템') AS actor
          FROM assignment_history h LEFT JOIN users u ON u.id = h.actor_id
          WHERE h.assignment_id = $1 ORDER BY h.at, h.id`,
+        [r.id],
+      ),
+      pool.query(
+        `SELECT mr.model_version FROM assignment_images ai JOIN model_runs mr ON mr.id = ai.run_id
+         WHERE ai.assignment_id = $1 GROUP BY mr.model_version ORDER BY count(*) DESC LIMIT 1`,
         [r.id],
       ),
     ])
@@ -118,6 +123,7 @@ export default async function assignmentRoutes(app) {
       assigneeId: String(r.assignee_id),
       createdBy: r.created_by_name,
       inspectionNote: r.inspection_note,
+      modelVersion: mv.rows[0]?.model_version ?? null,
       counts: { ...base.counts, approved: by.APPROVED ?? 0, rejected: by.REJECTED ?? 0 },
       history: hist.rows,
     }

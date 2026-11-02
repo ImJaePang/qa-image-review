@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -7,6 +8,7 @@ import { LoginPage, SignupPage } from '@/pages/AuthPages'
 import { AssignmentListPage } from '@/pages/AssignmentListPage'
 import { Placeholder } from '@/pages/Placeholder'
 import { MENU } from '@/config/menu'
+import { useAuth } from '@/stores/auth'
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } })
 const placeholderPaths = MENU.flatMap((m) => m.groups.flatMap((g) => g.items.map((i) => i.path))).filter(
@@ -14,6 +16,10 @@ const placeholderPaths = MENU.flatMap((m) => m.groups.flatMap((g) => g.items.map
 )
 
 export default function App() {
+  const init = useAuth((s) => s.init)
+  useEffect(() => {
+    init()
+  }, [init])
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

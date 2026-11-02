@@ -6,9 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { api } from '@/mock/api'
-import { seedImages } from '@/mock/data'
-import { fmtDate, fmtDateTime, verdictOf } from '@/lib/domain'
+import { api } from '@/api'
+import { fmtDate, fmtDateTime } from '@/lib/domain'
 import { ASSIGNMENT_STATUSES, type Assignment, type AssignmentStatus } from '@/lib/types'
 import { useCurrentUser } from '@/stores/auth'
 import { cn } from '@/lib/utils'
@@ -49,7 +48,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export function AssignmentDetailDialog({ id, onClose }: { id: string | null; onClose: () => void }) {
-  const { data: a } = useQuery({ queryKey: ['assignments', id], queryFn: () => api.getAssignment(id!), enabled: !!id })
+  const { data: a, isError, error } = useQuery({
+    queryKey: ['assignments', 'detail', id],
+    queryFn: () => api.getAssignment(id!),
+    enabled: !!id,
+  })
   return (
     <Dialog open={!!id} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex h-[88vh] max-w-[calc(100%-2rem)] flex-col gap-3 sm:max-w-6xl">
@@ -58,7 +61,9 @@ export function AssignmentDetailDialog({ id, onClose }: { id: string | null; onC
         ) : (
           <>
             <DialogTitle>배정 상세</DialogTitle>
-            <DialogDescription>불러오는 중…</DialogDescription>
+            <DialogDescription className={isError ? 'text-destructive' : undefined}>
+              {isError ? (error as Error).message : '불러오는 중…'}
+            </DialogDescription>
           </>
         )}
       </DialogContent>
@@ -75,38 +80,43 @@ function Body({ a }: { a: Assignment }) {
 
   const isAdmin = me?.role === 'admin'
   const isAssignee = me?.id === a.assigneeId
-  const reviewed = Object.values(a.reviews).filter((r) => r.status !== '미검토').length
-  const total = a.imageIds.length
+  const reviewed = a.counts.reviewed
+  const total = a.counts.total
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['assignments'] })
 
   const setStatus = useMutation({
-    mutationFn: (v: { status: AssignmentStatus; action: string }) => api.setStatus(a.id, v.status, me?.name ?? '-', v.action),
+    mutationFn: (v: { status: AssignmentStatus }) => api.setStatus(a.id, v.status),
     onSuccess: (_d, v) => {
       toast.success(`상태가 ‘${v.status}’(으)로 변경되었습니다.`)
       refresh()
     },
+    onError: (e: Error) => {
+      toast.error(e.message)
+      refresh()
+    },
   })
   const saveNote = useMutation({
-    mutationFn: () => api.saveNote(a.id, note, me?.name ?? '-'),
+    mutationFn: () => api.saveNote(a.id, note),
     onSuccess: () => {
       toast.success('점검 내용을 저장했습니다.')
       setNoteDraft(null)
       refresh()
     },
+    onError: (e: Error) => toast.error(e.message),
   })
 
   // 상태별 다음 단계 액션
   const next = (() => {
     switch (a.status) {
       case '배정':
-        return isAdmin ? { label: '사전배치 실행 (AI 사전 검증)', status: '사전배치' as const, action: '사전배치(AI 사전 검증) 실행' } : null
+        return isAdmin ? { label: '사전배치 실행 (AI 사전 검증)', status: '사전배치' as const } : null
       case '사전배치':
-        return isAssignee || isAdmin ? { label: '점검 시작', status: '점검중' as const, action: '점검 시작' } : null
+        return isAssignee || isAdmin ? { label: '점검 시작', status: '점검중' as const } : null
       case '점검중':
-        return isAssignee || isAdmin ? { label: '점검 완료', status: '점검완료' as const, action: '점검 완료' } : null
+        return isAssignee || isAdmin ? { label: '점검 완료', status: '점검완료' as const } : null
       case '점검완료':
-        return isAdmin ? { label: '확인 완료', status: '확인완료' as const, action: '확인 완료' } : null
+        return isAdmin ? { label: '확인 완료', status: '확인완료' as const } : null
       default:
         return null
     }
@@ -123,11 +133,7 @@ function Body({ a }: { a: Assignment }) {
   }
 
   const canReview = a.status === '점검중' && (isAssignee || isAdmin)
-  const counts = { 정상: 0, 의심: 0, 불량: 0 }
-  a.imageIds.forEach((iid) => {
-    const img = seedImages.find((x) => x.imageId === iid)
-    if (img) counts[verdictOf(img)]++
-  })
+  const counts = a.counts
 
   return (
     <>
@@ -163,12 +169,12 @@ function Body({ a }: { a: Assignment }) {
             <Field label="마감일">{a.dueDate}</Field>
             <Field label="이미지 수">{total}장</Field>
             <Field label="AI 판정 분포">
-              정상 {counts.정상} · 의심 {counts.의심} · 불량 {counts.불량}
+              정상 {counts.normal} · 의심 {counts.suspect} · 불량 {counts.defect}
             </Field>
             <Field label="검수 진행">
               {reviewed}/{total} ({total ? Math.round((reviewed / total) * 100) : 0}%)
             </Field>
-            <Field label="모델 버전">mock-v1</Field>
+            <Field label="모델 버전">{a.modelVersion ?? '-'}</Field>
           </dl>
           <div className="mt-6 h-2 w-full overflow-hidden rounded-full bg-muted">
             <div className="h-full bg-primary transition-all" style={{ width: `${total ? (reviewed / total) * 100 : 0}%` }} />

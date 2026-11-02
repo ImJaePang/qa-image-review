@@ -5,11 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Logo } from '@/components/layout/TopBar'
 import { useAuth, useCurrentUser } from '@/stores/auth'
 import { useTheme } from '@/stores/theme'
-import type { Role } from '@/lib/types'
 
 function AuthShell({ title, desc, children }: { title: string; desc: string; children: ReactNode }) {
   const { theme, toggle } = useTheme()
@@ -36,19 +34,28 @@ function AuthShell({ title, desc, children }: { title: string; desc: string; chi
 
 export function LoginPage() {
   const user = useCurrentUser()
+  const ready = useAuth((s) => s.ready)
   const login = useAuth((s) => s.login)
   const navigate = useNavigate()
   const loc = useLocation()
   const [email, setEmail] = useState('admin@example.com')
   const [password, setPassword] = useState('1234')
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  if (user) return <Navigate to="/review/assignments" replace />
+  if (ready && user) return <Navigate to="/review/assignments" replace />
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!login(email, password)) return setError('이메일 또는 비밀번호가 올바르지 않습니다.')
-    navigate((loc.state as { from?: string } | null)?.from ?? '/review/assignments', { replace: true })
+    setBusy(true)
+    try {
+      await login(email, password)
+      navigate((loc.state as { from?: string } | null)?.from ?? '/review/assignments', { replace: true })
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -63,7 +70,7 @@ export function LoginPage() {
           <Input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" className="w-full">
+        <Button type="submit" className="w-full" disabled={busy}>
           로그인
         </Button>
         <p className="text-center text-sm text-muted-foreground">
@@ -84,17 +91,24 @@ export function SignupPage() {
   const signup = useAuth((s) => s.signup)
   const navigate = useNavigate()
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' })
-  const [role, setRole] = useState<Role>('qa')
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value })
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (form.password.length < 4) return setError('비밀번호는 4자 이상이어야 합니다.')
     if (form.password !== form.confirm) return setError('비밀번호 확인이 일치하지 않습니다.')
-    const res = signup(form.name, form.email, form.password, role)
-    if (!res.ok) return setError(res.error ?? '가입에 실패했습니다.')
-    navigate('/login')
+    setBusy(true)
+    try {
+      // 가입은 항상 QA 담당자 역할 (관리자 지정은 서버/DB에서만)
+      await signup(form.name, form.email, form.password)
+      navigate('/review/assignments', { replace: true })
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -109,18 +123,6 @@ export function SignupPage() {
           <Input id="email" type="email" value={form.email} onChange={set('email')} required />
         </div>
         <div className="space-y-2">
-          <Label>역할</Label>
-          <Select items={[{ value: 'qa', label: 'QA 담당자' }, { value: 'admin', label: '관리자' }]} value={role} onValueChange={(v) => setRole((v ?? "qa") as Role)}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="qa">QA 담당자</SelectItem>
-              <SelectItem value="admin">관리자</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
           <Label htmlFor="pw">비밀번호</Label>
           <Input id="pw" type="password" value={form.password} onChange={set('password')} required />
         </div>
@@ -129,7 +131,7 @@ export function SignupPage() {
           <Input id="pw2" type="password" value={form.confirm} onChange={set('confirm')} required />
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" className="w-full">
+        <Button type="submit" className="w-full" disabled={busy}>
           가입하기
         </Button>
         <p className="text-center text-sm text-muted-foreground">

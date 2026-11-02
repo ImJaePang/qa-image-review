@@ -20,7 +20,7 @@ npm run dev
 데모 계정: `admin@example.com`(관리자), `qa1@example.com`(QA) / 비밀번호 `1234`
 
 ## 다음에 이어서 할 일 (여기서부터 재개)
-1. 프론트의 `src/mock/api.ts`를 `fetch`로 교체 (함수 시그니처 유지), 이미지 목록은 서버 페이지네이션 + 가상 스크롤.
+1. 모니터링 페이지(소요 시간 분석), 규칙 관리 API(rules 수정·재판정), 썸네일 생성. 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 [docs/design.md](docs/design.md) 6장.
 
 자세한 설계와 이유는 [docs/design.md](docs/design.md) 참고.
 
@@ -31,15 +31,18 @@ npm run dev
 - [x] 목 이미지/모델 결과 생성 스크립트: `node backend/scripts/generate-mock.mjs --count 3000` → `data/images/`(git 제외), `results.jsonl`은 5장 JSON 계약 + originalPath/durationMs
 - [x] 백엔드 API (Fastify): 인증, 배정 목록/상세/신규/상태 변경/점검 내용, 이미지 페이지 조회, 검수 저장, 파일 서빙 (`cd backend && npm run dev`, 포트 3000)
 - [ ] 규칙 관리 API(rules 테이블 수정·재판정), 썸네일 생성
-- [ ] 프론트를 실제 API로 교체, 3천 장 대응(서버 페이지네이션, 가상 스크롤)
+- [x] 프론트를 실제 API로 교체, 3천 장 대응 (서버 페이지네이션 + 가상 스크롤 + 낙관적 업데이트). 3천 장 배정 생성→사전배치→점검→검수 흐름을 브라우저로 확인 (`captures/2026-11-02_v0.2-api-connected`)
 - [ ] 모니터링 페이지(소요 시간 분석)
 - [ ] (선택) 실제 모델 연동
 
-## 백엔드 실행
+## 전체 실행 (개발)
 ```
-cd backend && npm install
-npm run dev      # .env의 JWT_SECRET, API_PORT, POSTGRES_* 사용. 먼저 DB 기동 + npm run load-mock
+docker compose up -d                          # DB
+cd backend && npm install && npm run load-mock   # 최초 1회: 목 데이터 생성(generate-mock) 후 적재
+npm run dev                                   # API, 포트 3000 (.env의 JWT_SECRET 필요)
+cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api, /files는 3000으로 프록시)
 ```
+처음이면 `npm run generate-mock`을 먼저 실행해 `data/images/`를 만든다.
 엔드포인트 요약은 [docs/design.md](docs/design.md) 3-1장.
 
 ## DB 실행

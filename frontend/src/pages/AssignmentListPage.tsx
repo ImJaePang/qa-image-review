@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,10 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { StatusBadge } from '@/components/assignment/badges'
 import { NewAssignmentDialog } from '@/components/assignment/NewAssignmentDialog'
 import { AssignmentDetailDialog } from '@/components/assignment/AssignmentDetailDialog'
-import { api } from '@/mock/api'
-import { seedImages } from '@/mock/data'
-import { fmtDate, verdictOf } from '@/lib/domain'
-import { ASSIGNMENT_STATUSES } from '@/lib/types'
+import { api } from '@/api'
+import { fmtDate } from '@/lib/domain'
+import { ASSIGNMENT_STATUSES, type AssignmentStatus } from '@/lib/types'
 import { useCurrentUser } from '@/stores/auth'
 
 const PAGE_SIZE = 8
@@ -27,21 +26,29 @@ export function AssignmentListPage() {
   const [status, setStatus] = useState<string>(ALL)
   const [page, setPage] = useState(1)
 
-  const { data = [], isLoading } = useQuery({ queryKey: ['assignments'], queryFn: api.listAssignments })
+  // 검색어는 입력이 멈춘 뒤에 서버로 보낸다
+  const [debouncedQ, setDebouncedQ] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q.trim()), 300)
+    return () => clearTimeout(t)
+  }, [q])
 
-  const filtered = useMemo(
-    () =>
-      data.filter(
-        (a) =>
-          (status === ALL || a.status === status) &&
-          (!q || a.title.includes(q) || a.id.toLowerCase().includes(q.toLowerCase()) || a.assigneeName.includes(q)),
-      ),
-    [data, q, status],
-  )
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const rows = filtered.slice((Math.min(page, pages) - 1) * PAGE_SIZE, Math.min(page, pages) * PAGE_SIZE)
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['assignments', 'list', { status, q: debouncedQ, page }],
+    queryFn: () =>
+      api.listAssignments({
+        status: status === ALL ? undefined : (status as AssignmentStatus),
+        q: debouncedQ || undefined,
+        page,
+        pageSize: PAGE_SIZE,
+      }),
+    placeholderData: keepPreviousData,
+  })
 
-  const statusCount = (s: string) => data.filter((a) => a.status === s).length
+  const rows = data?.items ?? []
+  const total = data?.total ?? 0
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const statusCount = (s: AssignmentStatus) => data?.statusCounts[s] ?? 0
 
   return (
     <div className="space-y-4">
@@ -132,7 +139,14 @@ export function AssignmentListPage() {
                 </TableCell>
               </TableRow>
             )}
-            {!isLoading && rows.length === 0 && (
+            {isError && (
+              <TableRow>
+                <TableCell colSpan={9} className="h-24 text-center text-destructive">
+                  {(error as Error).message}
+                </TableCell>
+              </TableRow>
+            )}
+            {!isLoading && !isError && rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                   조건에 맞는 배정이 없습니다.
@@ -140,13 +154,9 @@ export function AssignmentListPage() {
               </TableRow>
             )}
             {rows.map((a) => {
-              const c = { 정상: 0, 의심: 0, 불량: 0 }
-              a.imageIds.forEach((id) => {
-                const img = seedImages.find((x) => x.imageId === id)
-                if (img) c[verdictOf(img)]++
-              })
-              const done = Object.values(a.reviews).filter((r) => r.status !== '미검토').length
-              const total = a.imageIds.length
+              const c = a.counts
+              const done = c.reviewed
+              const total = c.total
               return (
                 <TableRow key={a.id} className="cursor-pointer" onClick={() => setParams({ id: a.id })}>
                   <TableCell className="font-mono text-xs">{a.id}</TableCell>
@@ -157,9 +167,9 @@ export function AssignmentListPage() {
                   <TableCell>{a.assigneeName}</TableCell>
                   <TableCell className="text-right tabular-nums">{total}</TableCell>
                   <TableCell className="text-xs tabular-nums">
-                    <span className="text-emerald-600 dark:text-emerald-400">{c.정상}</span> /{' '}
-                    <span className="text-amber-600 dark:text-amber-400">{c.의심}</span> /{' '}
-                    <span className="text-red-600 dark:text-red-400">{c.불량}</span>
+                    <span className="text-emerald-600 dark:text-emerald-400">{c.normal}</span> /{' '}
+                    <span className="text-amber-600 dark:text-amber-400">{c.suspect}</span> /{' '}
+                    <span className="text-red-600 dark:text-red-400">{c.defect}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -181,13 +191,13 @@ export function AssignmentListPage() {
       </div>
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <span>총 {filtered.length}건</span>
+        <span>총 {total}건</span>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon-sm" disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label="이전 페이지">
             <ChevronLeft className="size-4" />
           </Button>
           <span className="tabular-nums">
-            {Math.min(page, pages)} / {pages}
+            {page} / {pages}
           </span>
           <Button variant="outline" size="icon-sm" disabled={page >= pages} onClick={() => setPage(page + 1)} aria-label="다음 페이지">
             <ChevronRight className="size-4" />
