@@ -25,8 +25,8 @@ npm run dev
 요약: 폴더 감시(inbox → processing → done/failed, 파일 이동) → 별도 워커가 1장씩 순차 추론 → 판정. 사전배치(PRECHECKED) 상태는 없앤다. 같은 파일 재수신은 막지 않고 새 행으로 쌓되 `origin_image_id`로 연결.
 
 구현 순서:
-1. [x] DB 마이그레이션(`images` 컬럼, `ingest_batches`, `integrations`, 공통 컬럼 소급) + 모델 어댑터 인터페이스(계약 검증) + 목 구현 — 구현·테스트 완료, **커밋 전** (사용자 요청 시 커밋)
-2. [ ] `scanOnce`/`processOne` + 워커 프로세스(`npm run worker`) + 테스트
+1. [x] DB 마이그레이션(`images` 컬럼, `ingest_batches`, `integrations`, 공통 컬럼 소급) + 모델 어댑터 인터페이스(계약 검증) + 목 구현 (커밋 3ef6f0d)
+2. [x] `scanOnce`/`processOne`/`runCycle` + 워커 프로세스(`npm run worker`) + 테스트 25개 (구현 메모: design.md 8장 끝)
 3. [ ] PRECHECKED 제거 (백엔드 `TRANSITIONS`·배정 생성, 프론트 단계/카드/`mappers.ts`, 소요 시간 화면, 테스트)
 4. [ ] 관리자 `연계 관리` 화면 (연계 설정·추가가 목적. 화면 구성은 목업을 먼저 보여주고 사용자와 정한다)
 
@@ -48,7 +48,8 @@ npm run dev
 - [x] 프론트를 실제 API로 교체, 3천 장 대응 (서버 페이지네이션 + 가상 스크롤 + 낙관적 업데이트). 3천 장 배정 생성→사전배치→점검→검수 흐름을 브라우저로 확인 (`captures/2026-11-02_v0.2-api-connected`)
 - [x] 모니터링 페이지(소요 시간 분석): 담당자별 검수 속도, 배정별 소요, 모델 처리 시간, 사전배치 기록 (`/monitoring/time`, 관리자 전용)
 - [x] 파일 수신 사전 검증 1단계: 마이그레이션 체계(`npm run migrate`), 수신 상태 컬럼, 연계/수신 배치 테이블, 모델 어댑터 계약 검증 + 목 어댑터
-- [ ] 파일 수신 사전 검증 2~4단계 (위 구현 순서)
+- [x] 파일 수신 사전 검증 2단계: 폴더 스캔(안정 판정, 매직바이트, 해시 연결), 순차 추론, 실패 격리, 워커 (`npm run worker`)
+- [ ] 파일 수신 사전 검증 3~4단계 (위 구현 순서)
 - [ ] (선택) 실제 모델 연동
 
 ## 전체 실행 (개발)
@@ -57,6 +58,7 @@ docker compose up -d                          # DB
 cd backend && npm install && npm run migrate     # 스키마 변경분 적용 (이미 적용된 것은 건너뜀)
 npm run load-mock                             # 최초 1회: 목 데이터 생성(generate-mock) 후 적재
 npm run dev                                   # API, 포트 3000 (.env의 JWT_SECRET 필요)
+npm run worker                                # (선택) 파일 수신 워커: data/images/ingest/inbox 에 이미지를 넣으면 5초 주기로 수신·추론
 cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api, /files는 3000으로 프록시)
 ```
 처음이면 `npm run generate-mock`을 먼저 실행해 `data/images/`를 만든다.
@@ -64,7 +66,7 @@ cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api, /file
 
 ## 테스트
 ```
-cd backend && npm test      # 백엔드 테스트 54개 (API 통합, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
+cd backend && npm test      # 백엔드 테스트 79개 (API 통합, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
 cd frontend && npm test     # 단위 테스트 (영문 코드↔한글 매핑 등)
 cd frontend && npx tsc -b   # 타입 체크
 ```
