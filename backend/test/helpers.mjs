@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import pg from 'pg'
+import { applyMigrations } from '../src/migrate.mjs'
 
 const TEST_DB = 'qa_review_test'
 process.env.POSTGRES_DB = TEST_DB
@@ -33,11 +34,12 @@ export async function resetTestDb() {
   await db.connect()
   const initDir = resolve(import.meta.dirname, '../../db/init')
   for (const f of ['01_schema.sql', '02_seed.sql']) await db.query(readFileSync(join(initDir, f), 'utf8'))
+  await applyMigrations(db)
 
   for (const [i, score] of FIXTURE_SCORES.entries()) {
     const key = `img_${String(i + 1).padStart(4, '0')}`
     const img = await db.query(
-      `INSERT INTO images (image_key, file_name, width, height, original_path) VALUES ($1, $2, 1920, 1080, $3) RETURNING id`,
+      `INSERT INTO images (image_key, file_name, width, height, original_path, source_name, ingest_status) VALUES ($1, $2, 1920, 1080, $3, $2, 'DONE') RETURNING id`,
       [key, `tank_${i + 1}.png`, `originals/${key}.svg`],
     )
     const run = await db.query(

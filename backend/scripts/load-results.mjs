@@ -63,12 +63,12 @@ try {
     const chunk = todo.slice(i, i + BATCH)
 
     const img = values(
-      chunk.map((r) => [r.imageId, r.fileName, r.width, r.height, r.originalPath]),
-      ['k', 'f', 'w', 'h', 'p'],
+      chunk.map((r) => [r.imageId, r.fileName, r.width, r.height, r.originalPath, r.fileName, 'DONE']),
+      ['k', 'f', 'w', 'h', 'p', 's', 'i'],
     )
     const imgIds = (
       await client.query(
-        `INSERT INTO images (image_key, file_name, width, height, original_path) VALUES ${img.text} RETURNING id, image_key`,
+        `INSERT INTO images (image_key, file_name, width, height, original_path, source_name, ingest_status) VALUES ${img.text} RETURNING id, image_key`,
         img.params,
       )
     ).rows

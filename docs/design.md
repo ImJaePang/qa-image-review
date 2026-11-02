@@ -1,7 +1,7 @@
 # 설계·진행 기록
 
 기획서(`plan.md`) 이후 대화에서 정해진 사항과 현재 구현 상태를 정리한 문서. 새 작업을 시작할 때 먼저 읽는다.
-마지막 갱신: 2026-11-01
+마지막 갱신: 2026-11-02
 
 ## 1. 현재 구현 상태
 
@@ -215,7 +215,7 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 - `assignments.status` CHECK에서 `PRECHECKED` 제거 (기존 PRECHECKED 데이터는 ASSIGNED로 이전), `batch_jobs` 대체.
 - 서버 `TRANSITIONS`와 신규 배정 조건(`ingest_status='DONE'`만), 프론트 상태 단계 표시·요약 카드(5칸 → 4칸), `mappers.ts`, 소요 시간 화면의 "사전배치" 카드·표, 관련 테스트(`monitoring.test.mjs`의 PRECHECKED 이력·batch_jobs 시나리오, `api.test.mjs`의 배정 흐름).
 
-### 순서
+### 순서 (①은 완료, 아래 "1단계 구현 메모" 참고)
 ① 마이그레이션 + 모델 어댑터 인터페이스 + 목 구현 → ② `scanOnce`/`processOne` + 워커 프로세스 + 테스트 → ③ PRECHECKED 제거 (백엔드·프론트·테스트) → ④ 연계 관리 화면. 각 단계마다 테스트가 통과한 상태에서 커밋한다.
 
 ### 공통 컬럼 (미정, 의견만 정리)
@@ -223,3 +223,11 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 
 ### GPU 메모 (개발 PC: RTX 4060 Ti 16GB)
 이상 탐지·분류 CNN/ViT급은 충분. 7B급 멀티모달은 양자화해야 가능. 실제 모델 확정 후 재산정 필요. 이미지 디코딩/디스크 읽기도 병목이 될 수 있다. 워커는 컨테이너 밖에서 직접 실행하는 편이 GPU 설정이 간단하다.
+
+### 1단계 구현 메모 (2026-11-02)
+- **마이그레이션**: `db/migrations/NNN_*.sql`을 `backend/src/migrate.mjs`가 번호순으로 적용하고 `schema_migrations`에 이력을 남긴다. 파일 하나 = 트랜잭션 하나. 새 환경은 `docker compose up -d`(init SQL) 뒤에 `npm run migrate`. 테스트 DB도 같은 방식으로 만든다. init SQL(01, 02)은 건드리지 않고 변경은 모두 마이그레이션으로 쌓는다.
+- **001 내용**: `images`에 수신/추론 컬럼 추가(`width`/`height`는 NULL 허용, 단 `DONE`이면 필수 — CHECK), 기존 이미지는 `DONE`·`source_name=file_name`으로 이전, 새 행 기본값은 `PENDING`. `integrations`, `ingest_batches` 신설. 대기 건 조회용 부분 인덱스(`images_pending_idx`).
+- **공통 컬럼 소급**: `users`, `rules`, `images`, `assignments`에 `created_by`/`updated_by`/`updated_at` 보강(이미 있는 것은 유지). `updated_at`은 `set_updated_at()` 트리거가 자동 갱신, `updated_by`는 API가 채우며 NULL은 시스템. 제외: 쌓기 전용(`reviews`, `assignment_history`, `model_runs`, `detections`, `verdicts`), 소속 테이블(`assignment_images`), 대체 예정인 `batch_jobs`. 기존 API 코드는 아직 `updated_by`를 채우지 않는다 (3단계 이후 정리).
+- **`images.original_path`**: 아직 NOT NULL. 수신 시 현재 파일 위치로 채우고, 파일이 inbox → processing → done으로 옮겨지면 `source_path`와 함께 갱신하는 방식을 2단계에서 정한다.
+- **모델 어댑터** (`backend/src/model/`): `contract.mjs`(5장 계약 검증 `validateResult`/`assertValidResult`, 박스가 이미지 밖이면 위반), `mock.mjs`(`createMockAdapter`: 파일 내용 sha256으로 시드를 정해 같은 파일이면 같은 결과). 인터페이스는 `adapter.modelVersion`, `adapter.infer({imageKey, fileName, filePath, outputDir}) → 계약 객체`, 실패는 예외. `scripts/generate-mock.mjs`는 그대로 두었다 (이미 적재된 3천 장의 재현성 유지).
+- `scripts/load-results.mjs`는 새 기본값(PENDING) 때문에 `ingest_status='DONE'`, `source_name`을 명시해서 넣는다.
