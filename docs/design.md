@@ -283,3 +283,10 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 - `Cache-Control: private, max-age=300` + 약한 ETag(크기+mtime). 5분간은 DB 조회 없이 브라우저 캐시, 이후 If-None-Match로 304. 접근 권한을 회수해도 최대 5분은 캐시본이 보일 수 있다(수용).
 - 목록 응답에 `originalUrl` 추가(⑤ 원본 고정 모드용). `@fastify/static` 의존성 제거.
 - 3천 장 요청 지연 측정은 아직 안 했다(권한 쿼리 1~2회/요청).
+
+### ④ 구현 메모 (2026-11-03)
+- `ingest/derive.mjs`: `sharp`로 `derived/thumb|preview/<imageKey>.webp` 생성. thumb 긴 변 320px(q70), preview 긴 변 2560px(q82), `fit: inside` + `withoutEnlargement`(비율 유지, 작은 이미지는 키우지 않음), EXIF 회전 적용. 크기·품질은 기획서 10장 질문(포맷·변환 정책)이 확정되기 전의 잠정값(`DERIVE` 상수).
+- `processOne`이 추론 성공 뒤, 원본을 done으로 옮기기 전에 사본을 만들고 DB 갱신과 같은 트랜잭션에서 경로를 저장한다. DB 저장이 실패하면 사본도 지운다.
+- **사본 생성 실패는 수신 실패가 아니다**: 경로를 NULL로 두고 DONE 처리 → 파일 API가 원본으로 대신 내려준다(결과 객체의 `derived: false`로 확인 가능). 판정은 원본 기준이므로 사본 문제로 검수를 막지 않는다.
+- 이미 수신된 이미지는 `npm run make-derivatives`(사본 없는 DONE 건만, 재실행 안전). 개발 DB의 목 SVG 3천 장: 실패 0, 약 333초(GPU 생성 병행 중 측정).
+- 박스 좌표는 원본 픽셀 기준이므로, 화면은 사본이 아니라 `images.width/height`(원본 크기)를 기준으로 오버레이를 계산해야 한다(⑤에서 확인할 것).

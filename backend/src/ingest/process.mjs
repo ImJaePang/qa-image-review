@@ -9,6 +9,7 @@ import { assertValidResult } from '../model/contract.mjs'
 import { judge, reasonsOf } from '../rules.mjs'
 import { txWith } from '../tx.mjs'
 import { bumpBatch } from './batch.mjs'
+import { makeDerivatives, removeDerivatives } from './derive.mjs'
 import { resolveFolderConfig } from './folder-config.mjs'
 import { moveFile, toStoredPath } from './fsutil.mjs'
 
@@ -66,11 +67,14 @@ async function succeed(pool, img, cfg, filesDir, rule, result) {
   const dest = join(cfg.doneDir, basename(src))
   const stored = toStoredPath(filesDir, dest)
   let moved = false
+  // 사본(thumb/preview)은 원본이 아직 processing에 있을 때 만든다. 실패해도 수신은 계속(경로 NULL → 원본으로 대체 서빙)
+  const derived = await makeDerivatives({ srcAbs: src, filesDir, imageKey: img.image_key })
   try {
     await txWith(pool, async (client) => {
       await client.query(
-        `UPDATE images SET ingest_status = 'DONE', error = NULL, width = $2, height = $3, source_path = $4, original_path = $4 WHERE id = $1`,
-        [img.id, result.width, result.height, stored],
+        `UPDATE images SET ingest_status = 'DONE', error = NULL, width = $2, height = $3, source_path = $4, original_path = $4,
+                           thumb_path = $5, preview_path = $6 WHERE id = $1`,
+        [img.id, result.width, result.height, stored, derived?.thumbPath ?? null, derived?.previewPath ?? null],
       )
       const run = await client.query(
         `INSERT INTO model_runs (image_id, model_version, overall_score, heatmap_path, duration_ms) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
@@ -96,8 +100,10 @@ async function succeed(pool, img, cfg, filesDir, rule, result) {
     })
   } catch (err) {
     if (moved) await moveFile(dest, src).catch(() => {})
+    if (derived) await removeDerivatives({ filesDir, imageKey: img.image_key })
     throw err
   }
+  return { derived: !!derived }
 }
 
 /** @returns {status:'IDLE'} 대기 없음 | {status:'DONE'|'FAILED', imageKey, error?} */
@@ -126,8 +132,8 @@ export async function processOne({ pool, adapter, root, filesDir, ruleName = 'sc
     )
     if (result.imageId !== img.image_key) throw new Error(`모델 출력의 imageId(${result.imageId})가 요청(${img.image_key})과 다름`)
     result.durationMs ??= Date.now() - started
-    await succeed(pool, img, cfg, filesDir, rule, result)
-    return { status: 'DONE', imageKey: img.image_key }
+    const { derived } = await succeed(pool, img, cfg, filesDir, rule, result)
+    return { status: 'DONE', imageKey: img.image_key, derived }
   } catch (err) {
     await fail(pool, img, cfg, filesDir, err)
     return { status: 'FAILED', imageKey: img.image_key, error: String(err?.message ?? err) }

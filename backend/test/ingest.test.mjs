@@ -12,6 +12,8 @@ import { runCycle } from '../src/ingest/cycle.mjs'
 import { resolveFolderConfig } from '../src/ingest/folder-config.mjs'
 import { detectImageType } from '../src/ingest/sniff.mjs'
 import { createMockAdapter } from '../src/model/mock.mjs'
+import sharp from 'sharp'
+import { makeDerivatives } from '../src/ingest/derive.mjs'
 
 pg.types.setTypeParser(20, Number)
 pg.types.setTypeParser(1700, Number)
@@ -445,4 +447,62 @@ test('runCycle: 꺼진 연계는 스캔하지 않고, 설정이 잘못된 연계
   assert.ok(s.errors.some((e) => /허용 루트 밖/.test(e)))
   assert.equal(s.received, 1)
   assert.deepEqual(off.list(off.cfg.watchDir), ['o.svg']) // 꺼진 연계의 파일은 그대로
+})
+
+// ───────────── 썸네일·미리보기 사본 (④) ─────────────
+const png = (w, h) => sharp({ create: { width: w, height: h, channels: 3, background: '#6a7b5c' } }).png().toBuffer()
+
+test('사본 생성: 비율을 유지해 줄이고, 작은 이미지는 키우지 않는다', async () => {
+  const dir = mkdtempSync(join(FILES_DIR, 'derive-'))
+  const big = join(dir, 'big.png')
+  const small = join(dir, 'small.png')
+  writeFileSync(big, await png(4000, 2000))
+  writeFileSync(small, await png(100, 50))
+
+  const b = await makeDerivatives({ srcAbs: big, filesDir: FILES_DIR, imageKey: 'dv_big' })
+  const bp = await sharp(join(FILES_DIR, b.previewPath)).metadata()
+  const bt = await sharp(join(FILES_DIR, b.thumbPath)).metadata()
+  assert.deepEqual([bp.format, bp.width, bp.height], ['webp', 2560, 1280])
+  assert.deepEqual([bt.width, bt.height], [320, 160]) // 2:1 비율 유지 (박스 오버레이가 어긋나지 않게)
+
+  const s = await makeDerivatives({ srcAbs: small, filesDir: FILES_DIR, imageKey: 'dv_small' })
+  const sp = await sharp(join(FILES_DIR, s.previewPath)).metadata()
+  assert.deepEqual([sp.width, sp.height], [100, 50])
+})
+
+test('사본 생성: 디코딩할 수 없는 파일은 null을 돌려주고 흔적을 남기지 않는다', async () => {
+  const dir = mkdtempSync(join(FILES_DIR, 'derive-'))
+  const bad = join(dir, 'bad.png')
+  writeFileSync(bad, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('garbage')]))
+  assert.equal(await makeDerivatives({ srcAbs: bad, filesDir: FILES_DIR, imageKey: 'dv_bad' }), null)
+  assert.equal(existsSync(join(FILES_DIR, 'derived', 'thumb', 'dv_bad.webp')), false)
+  assert.equal(existsSync(join(FILES_DIR, 'derived', 'preview', 'dv_bad.webp')), false)
+})
+
+test('processOne: 수신 완료 시 thumb_path/preview_path가 채워지고 원본은 그대로다', async () => {
+  const t = await setup()
+  const content = await png(1600, 900)
+  t.drop('a.png', content)
+  await t.scan()
+  const r = await t.process(fixedAdapter([0.95]))
+  assert.equal(r.status, 'DONE')
+  assert.equal(r.derived, true)
+  const row = (await allImages())[0]
+  assert.match(row.thumb_path, /^derived\/thumb\/.+\.webp$/)
+  assert.match(row.preview_path, /^derived\/preview\/.+\.webp$/)
+  assert.ok(existsSync(join(FILES_DIR, row.thumb_path)) && existsSync(join(FILES_DIR, row.preview_path)))
+  assert.deepEqual(await sharp(join(FILES_DIR, row.original_path)).metadata().then((m) => [m.width, m.height]), [1600, 900])
+})
+
+test('processOne: 사본 생성이 실패해도 수신은 성공하고 경로는 비워 둔다 (원본으로 대체 서빙)', async () => {
+  const t = await setup()
+  t.drop('b.png', Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('garbage-bytes')]))
+  await t.scan()
+  const r = await t.process(fixedAdapter([0.95]))
+  assert.equal(r.status, 'DONE')
+  assert.equal(r.derived, false)
+  const row = (await allImages())[0]
+  assert.equal(row.ingest_status, 'DONE')
+  assert.equal(row.thumb_path, null)
+  assert.equal(row.preview_path, null)
 })

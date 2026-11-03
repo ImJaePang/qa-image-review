@@ -2,6 +2,9 @@
 // 실행: cd backend && npm test   (DB 컨테이너가 떠 있어야 함)
 import { after, before, describe, test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+import sharp from 'sharp'
 import { call, loginAs, resetTestDb, startApp } from './helpers.mjs'
 
 let app
@@ -276,6 +279,24 @@ describe('파일 API (/api/images/:imageKey/:kind)', () => {
       assert.equal((await get(`/api/images/${UNASSIGNED}/original`, admin)).statusCode, 404)
     } finally {
       await pool.query("UPDATE images SET original_path = 'originals/img_0001.svg' WHERE image_key = $1", [UNASSIGNED])
+    }
+  })
+
+  test('사본(thumb/preview)이 있으면 webp로 내려주고, original은 그대로다', async () => {
+    const { pool } = await import('../src/db.mjs')
+    const dir = join(process.env.FILES_DIR, 'derived', 'thumb')
+    mkdirSync(dir, { recursive: true })
+    await sharp({ create: { width: 64, height: 36, channels: 3, background: '#445566' } }).webp().toFile(join(dir, 'img_0002.webp'))
+    await pool.query("UPDATE images SET thumb_path = 'derived/thumb/img_0002.webp' WHERE image_key = 'img_0002'")
+    try {
+      const t = await get('/api/images/img_0002/thumb', admin)
+      assert.equal(t.statusCode, 200)
+      assert.equal(t.headers['content-type'], 'image/webp')
+      assert.equal(t.headers['content-security-policy'], undefined) // SVG가 아니므로 sandbox 헤더 불필요
+      assert.equal((await get('/api/images/img_0002/original', admin)).headers['content-type'], 'image/svg+xml')
+      assert.equal((await get('/api/images/img_0002/preview', admin)).headers['content-type'], 'image/svg+xml') // preview 없음 → 원본 대체
+    } finally {
+      await pool.query("UPDATE images SET thumb_path = NULL WHERE image_key = 'img_0002'")
     }
   })
 
