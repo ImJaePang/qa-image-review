@@ -60,7 +60,13 @@ export async function resetTestDb() {
 
   // 파일 서빙 테스트용
   mkdirSync(join(filesDir, 'originals'))
-  writeFileSync(join(filesDir, 'originals', 'img_0001.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>')
+  mkdirSync(join(filesDir, 'heatmaps'))
+  for (let i = 1; i <= FIXTURE_SCORES.length; i++) {
+    const key = `img_${String(i).padStart(4, '0')}`
+    writeFileSync(join(filesDir, 'originals', `${key}.svg`), '<svg xmlns="http://www.w3.org/2000/svg"/>')
+    writeFileSync(join(filesDir, 'heatmaps', `${key}.svg`), '<svg xmlns="http://www.w3.org/2000/svg"><!--heat--></svg>')
+  }
+  writeFileSync(join(filesDir, 'secret.txt'), 'outside images')
 }
 
 export async function startApp() {

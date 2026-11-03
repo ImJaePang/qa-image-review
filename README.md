@@ -28,7 +28,7 @@ npm run dev
 1. [x] DB 마이그레이션 + 모델 어댑터 계약/목 구현 (3ef6f0d)
 2. [x] `scanOnce`/`processOne`/`runCycle` + 워커 (`npm run worker`) (c6d3efc)
 3. [x] ① 워커 단일 실행 잠금 + 시작 시 고아 파일·PROCESSING 정리
-4. [ ] ② 이미지 ID 기반 파일 API (`/api/images/:key/thumb|preview|original|heatmap`), 이미지 단위 권한, 보안/캐시 헤더. 기존 `/files` 제거
+4. [x] ② 이미지 ID 기반 파일 API (`/api/images/:key/thumb|preview|original|heatmap`), 이미지 단위 권한, 보안/캐시 헤더. 기존 `/files` 제거
 5. [ ] ③ ComfyUI로 실제 원본 이미지 생성 스크립트 (300~500장, 정답 박스 포함). ComfyUI는 `H:\jjal\ComfyUI\ComfyUI_windows_portable` (`run_comfyui.bat`, 포트 8188), 모델은 `ComfyUI\models`
 6. [ ] ④ 썸네일·미리보기(webp) 생성 (비율 유지) — 추론 후 `thumb_path`/`preview_path` 채움
 7. [ ] ⑤ 검수 화면: 보기 모드 토글(미리보기/원본 고정, 이웃 미리 받기) + 마지막 검수자·시각 표시 (`reviewerName`/`reviewedAt`은 API에 이미 있음)
@@ -65,14 +65,14 @@ cd backend && npm install && npm run migrate     # 스키마 변경분 적용 (�
 npm run load-mock                             # 최초 1회: 목 데이터 생성(generate-mock) 후 적재
 npm run dev                                   # API, 포트 3000 (.env의 JWT_SECRET 필요)
 npm run worker                                # (선택) 파일 수신 워커: data/images/ingest/inbox 에 이미지를 넣으면 5초 주기로 수신·추론
-cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api, /files는 3000으로 프록시)
+cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api는 3000으로 프록시)
 ```
 처음이면 `npm run generate-mock`을 먼저 실행해 `data/images/`를 만든다.
 엔드포인트 요약은 [docs/design.md](docs/design.md) 3-1장.
 
 ## 테스트
 ```
-cd backend && npm test      # 백엔드 테스트 89개 (API 통합, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
+cd backend && npm test      # 백엔드 테스트 95개 (API 통합, 파일 API, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
 cd frontend && npm test     # 단위 테스트 (영문 코드↔한글 매핑 등)
 cd frontend && npx tsc -b   # 타입 체크
 ```

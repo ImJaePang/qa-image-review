@@ -10,7 +10,8 @@ const FILTERS = {
   rejected: "rc.status = 'REJECTED'",
 }
 
-const fileUrl = (p) => (p ? `/files/${p.replace(/^\/+/, '')}` : null)
+// 파일은 이미지 ID로 요청한다 (routes/files.mjs). 디스크 경로는 URL에 나오지 않는다.
+const fileUrl = (key, kind) => `/api/images/${key}/${kind}`
 
 const toItem = (r) => ({
   imageId: r.image_key,
@@ -22,9 +23,10 @@ const toItem = (r) => ({
   verdict: r.verdict,
   reasons: r.reasons ?? [],
   boxes: r.boxes,
-  thumbUrl: fileUrl(r.thumb_path ?? r.preview_path ?? r.original_path),
-  previewUrl: fileUrl(r.preview_path ?? r.original_path),
-  heatmapUrl: fileUrl(r.heatmap_path),
+  thumbUrl: fileUrl(r.image_key, 'thumb'),
+  previewUrl: fileUrl(r.image_key, 'preview'),
+  originalUrl: fileUrl(r.image_key, 'original'),
+  heatmapUrl: r.heatmap_path ? fileUrl(r.image_key, 'heatmap') : null,
   review: {
     status: r.review_status ?? 'NONE', // NONE = 미검토
     comment: r.review_comment ?? '',

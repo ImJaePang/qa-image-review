@@ -23,7 +23,7 @@ describe('영문 코드 ↔ 한글 매핑', () => {
 describe('toImageItem', () => {
   const base: ApiImageItem = {
     imageId: 'img_0001', fileName: 'a.png', width: 1920, height: 1080, modelVersion: 'v1', overallScore: 0.4,
-    boxes: [], previewUrl: '/files/a.svg', thumbUrl: '/files/a.svg', heatmapUrl: null, verdict: 'DEFECT',
+    boxes: [], previewUrl: '/api/images/img_0001/preview', thumbUrl: '/api/images/img_0001/thumb', heatmapUrl: null, verdict: 'DEFECT',
     review: { status: 'NONE', comment: '', reviewedAt: null },
   }
 

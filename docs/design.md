@@ -44,7 +44,7 @@ Vite 8 + React 19 + TypeScript(7) + Tailwind v4 + shadcn/ui(Base UI 기반) + Re
 ### API 연동 구조
 - `src/api/client.ts`: fetch 래퍼(같은 출처 `/api`, 쿠키 세션, 에러는 `{message}` → `ApiError`). 401을 받으면 인증 스토어가 로그아웃 상태로 전환.
 - `src/api/mappers.ts`: 서버 영문 코드 ↔ 화면 한글 값 변환 한 곳. 화면 코드는 한글 값만 다룬다.
-- `src/api/index.ts`: `api` 객체(함수 시그니처는 Promise 기반). 개발 중 Vite가 `/api`, `/files`를 백엔드(3000)로 프록시.
+- `src/api/index.ts`: `api` 객체(함수 시그니처는 Promise 기반). 개발 중 Vite가 `/api`를 백엔드(3000)로 프록시.
 - `src/stores/auth.ts`: 서버 세션(httpOnly 쿠키) 기반. 앱 시작 시 `/auth/me`로 확인(`ready`). 비밀번호나 계정을 브라우저에 저장하지 않는다.
 - 회원가입 화면의 역할 선택은 제거했다 (서버가 항상 `qa`로 만든다).
 - `src/lib/domain.ts`: 사유 코드 한글 라벨. 판정은 서버가 `rules` 기준으로 내려준다.
@@ -117,7 +117,7 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 | GET /api/assignments/:code/images?filter&verdict&page&pageSize | 서버 페이지네이션(최대 200). filter: all/unreviewed/approved/rejected | 로그인 |
 | PUT /api/assignments/:code/images/:imageKey/review | 승인/반려 저장. 점검중일 때만 | 담당자·관리자 |
 | GET /api/monitoring/time?gapMinutes=5 | 소요 시간 분석(담당자별·배정별·모델·사전배치). 자리 비움 기준 1~120분 | 관리자 |
-| GET /files/... | 이미지·히트맵 파일(`data/images`) | 로그인 |
+| GET /api/images/:imageKey/thumb|preview|original|heatmap | 이미지·히트맵 파일(이미지 ID 기반, 경로 비노출). 관리자 전부, QA는 자기 배정 이미지만, `ingest_status=DONE`만. `Cache-Control: private` + ETag(304), nosniff, SVG는 CSP sandbox | 로그인 |
 
 - 단계별 권한은 2장 표와 같다 (사전배치 실행·확인 완료는 관리자, 점검 시작·완료는 담당자 또는 관리자).
 - 사전배치는 지금은 실제 추론 없이 `batch_jobs`에 성공 기록만 남긴다 (모델 결과는 이미 적재됨). 실제 모델 연동 시 이 부분을 어댑터로 교체.
@@ -234,7 +234,7 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 
 ### 2단계 구현 메모 (2026-11-02)
 코드는 `backend/src/ingest/`, 워커 진입점은 `backend/src/worker.mjs`(`npm run worker`), 테스트는 `test/ingest.test.mjs`.
-- **폴더 구조**: 허용 루트(`INGEST_ROOT`, 기본 `<FILES_DIR>/ingest`) 아래에 `inbox`(감시) → `processing`(수신되어 처리 대기·처리 중) → `done` / `failed`. 루트를 FILES_DIR 아래에 둬서 완료 파일을 기존 `/files`로 그대로 서빙한다. 단점: inbox·failed도 같은 URL 공간에 있다(로그인 필요, 파일명이 `rcv_NNNNNN`이라 추측은 어렵지만 분리가 필요하면 완료 파일만 별도 서빙으로 바꾼다).
+- **폴더 구조**: 허용 루트(`INGEST_ROOT`, 기본 `<FILES_DIR>/ingest`) 아래에 `inbox`(감시) → `processing`(수신되어 처리 대기·처리 중) → `done` / `failed`. 루트를 FILES_DIR 아래에 둬서 완료 파일을 파일 API로 서빙한다(②에서 이미지 ID 기반으로 바뀌어 inbox·failed 파일은 URL로 받을 수 없다).
 - **`scanOnce({pool, integration, root, filesDir, seen})`**: 일반 파일 + 허용 확장자만 후보(`lstat`이라 심볼릭 링크 제외). `seen`(호출자가 유지하는 Map)에 직전 `크기:수정시각`이 같으면 안정으로 보고 수신 → 첫 관찰 때는 기억만 한다(=최소 2회 스캔). 수신 순서: 크기 상한·빈 파일·매직바이트 검사 → sha256 → 한 트랜잭션에서 images INSERT(임시 키) → `rcv_<id 6자리>`로 키 확정 → 파일 이동 → COMMIT. 이동 실패면 행도 롤백, COMMIT 실패면 파일을 되돌린다. 검사 불합격은 `failed`로 옮기고 `FAILED` 행을 남긴다(수신 시도를 기록으로 보이게). 같은 해시는 항상 **처음 수신 행**을 `origin_image_id`로 가리킨다(사슬 아님).
 - **`processOne({pool, adapter, root, filesDir, ruleName})`**: `UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1)`로 한 건을 PROCESSING으로 집는다(오래된 수신 순). 성공: `model_runs`(모델 버전·처리 시간), `detections`, `verdicts`(규칙은 rules의 활성 최신 버전, `rule_id` 기록)를 저장하고 파일을 `done`으로 이동, 크기를 채워 DONE. 실패(어댑터 예외, 계약 위반, imageId 불일치, 파일 없음): `failed`로 이동 + FAILED + 사유(500자), 모델 결과는 저장하지 않음. 배치 카운터(`processed_count`, `failed_count`)를 올리고 전부 끝나면 `finished_at`. 활성 규칙이 없거나 연계 설정을 못 읽는 것은 이미지 탓이 아니므로 이미지를 PENDING으로 두고 예외를 올린다.
 - **`runCycle`**: 켜진 FOLDER 연계마다 `scanIntervalSec`이 지났으면 스캔(연계 하나의 오류는 `errors`에 모으고 다른 연계·추론을 막지 않음) → 대기 이미지를 `maxPerCycle`(기본 20)장까지 처리. 시각은 `now` 인자로 받아 테스트에서 시간을 흉내 낸다. 워커는 시작 시 `recoverStuck`(PROCESSING → PENDING)을 1회 하고, 연계가 하나도 없으면 기본 폴더 연계를 만든다. SIGINT/SIGTERM에는 진행 중인 1장까지만 마치고 종료.
@@ -276,3 +276,10 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 - 목적: SVG 목 이미지로는 검증할 수 없는 것(수 MB PNG, 실제 디코딩·축소·webp 인코딩 시간, 원본 토글 체감 속도, PNG/JPEG 수신 경로)을 실제 파일로 검증. 연습 데이터는 직접 만든 것만 쓴다는 규칙에 맞다(회사 자료 아님. 사용 모델의 라이선스는 공개·배포 때 확인).
 - 환경(확인함): `H:\jjal\ComfyUI\ComfyUI_windows_portable`, `run_comfyui.bat`, 포트 **8188**(옵션 없음, 기본값), 출력 폴더 `H:\jjal\output`. 모델은 `ComfyUI\models`가 본체(`webui\models`는 Forge용, 일부 하드링크). 체크포인트: Z-Image-Turbo bf16, Animagine XL 3.1, CyberRealistic V4.1, 그 밖에 MOSS-Image, Wan2.1. 속도(벤치마크 문서): Z-Image-Turbo 832×1216에서 약 22초, 증류 LoRA 4스텝이면 약 10초. 인페인팅용 컨트롤넷은 없다.
 - 계획: ComfyUI 로컬 HTTP API(워크플로우 API JSON)로 스크립트 일괄 생성, 300~500장부터. 결함 이미지는 정상 이미지의 일부 영역을 img2img/재생성으로 바꿔 만들고 그 영역을 정답 박스로 기록(나중에 실제 이상 탐지 모델 평가에 사용). 3천 장 SVG 목 데이터는 부하 테스트용으로 유지.
+
+### ② 구현 메모 (2026-11-03)
+- `routes/files.mjs`: `GET /api/images/:imageKey/:kind`. `imageKey`는 `[A-Za-z0-9_-]`만 허용(스키마 검증). DB 경로는 `safeResolve`로 `filesDir` 밖이면 거부(DB가 오염돼도 방어). 미존재·`ingest_status<>'DONE'`은 404, 권한 없음은 403.
+- `heatmap`은 이미지의 **가장 최근 model_run** 것을 내려준다(목록의 `heatmapUrl`은 배정 시점 run 기준이라, 재실행이 생기면 둘이 달라질 수 있다 — 재판정/재실행 기능을 만들 때 다시 볼 것).
+- `Cache-Control: private, max-age=300` + 약한 ETag(크기+mtime). 5분간은 DB 조회 없이 브라우저 캐시, 이후 If-None-Match로 304. 접근 권한을 회수해도 최대 5분은 캐시본이 보일 수 있다(수용).
+- 목록 응답에 `originalUrl` 추가(⑤ 원본 고정 모드용). `@fastify/static` 의존성 제거.
+- 3천 장 요청 지연 측정은 아직 안 했다(권한 쿼리 1~2회/요청).

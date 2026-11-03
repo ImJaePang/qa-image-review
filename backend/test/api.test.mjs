@@ -217,14 +217,73 @@ describe('배정 흐름 (생성 → 사전배치 → 점검 → 완료 → 확�
   })
 })
 
-describe('파일 서빙', () => {
-  test('로그인 없이는 401, 로그인하면 200', async () => {
-    assert.equal((await app.inject({ url: '/files/originals/img_0001.svg' })).statusCode, 401)
-    assert.equal((await app.inject({ url: '/files/originals/img_0001.svg', headers: admin })).statusCode, 200)
+describe('파일 API (/api/images/:imageKey/:kind)', () => {
+  const get = (url, who) => app.inject({ url, headers: who ?? {} })
+  // 배정 흐름 테스트에서 qa1에게 의심·불량 6장(img_0007~12)이 배정됨. 정상 이미지(img_0001)는 미배정.
+  const ASSIGNED = 'img_0010'
+  const UNASSIGNED = 'img_0001'
+
+  test('로그인 없이는 401', async () => {
+    assert.equal((await get(`/api/images/${UNASSIGNED}/original`)).statusCode, 401)
   })
 
-  test('상위 폴더 접근은 막힌다', async () => {
-    const r = await app.inject({ url: '/files/../../.env', headers: admin })
-    assert.notEqual(r.statusCode, 200)
+  test('관리자는 모든 종류를 받는다 (사본이 없으면 원본으로 대신)', async () => {
+    for (const kind of ['thumb', 'preview', 'original', 'heatmap']) {
+      const r = await get(`/api/images/${UNASSIGNED}/${kind}`, admin)
+      assert.equal(r.statusCode, 200, kind)
+      assert.equal(r.headers['content-type'], 'image/svg+xml', kind)
+    }
+    assert.match((await get(`/api/images/${UNASSIGNED}/heatmap`, admin)).body, /heat/)
+    assert.match((await get(`/api/images/${UNASSIGNED}/thumb`, admin)).body, /^<svg/)
+  })
+
+  test('QA는 자기 배정 이미지만, 남의 것·미배정은 403', async () => {
+    assert.equal((await get(`/api/images/${ASSIGNED}/preview`, qa1)).statusCode, 200)
+    assert.equal((await get(`/api/images/${UNASSIGNED}/preview`, qa1)).statusCode, 403)
+    assert.equal((await get(`/api/images/${ASSIGNED}/preview`, qa2)).statusCode, 403)
+  })
+
+  test('보안·캐시 헤더, ETag로 재요청하면 304', async () => {
+    const r = await get(`/api/images/${ASSIGNED}/original`, qa1)
+    assert.match(r.headers['cache-control'], /^private/)
+    assert.equal(r.headers['x-content-type-options'], 'nosniff')
+    assert.equal(r.headers['content-security-policy'], 'sandbox')
+    assert.ok(r.headers.etag)
+    const again = await app.inject({ url: `/api/images/${ASSIGNED}/original`, headers: { ...qa1, 'if-none-match': r.headers.etag } })
+    assert.equal(again.statusCode, 304)
+  })
+
+  test('없는 이미지·잘못된 종류·경로 문자는 거부된다', async () => {
+    assert.equal((await get('/api/images/img_9999/original', admin)).statusCode, 404)
+    assert.equal((await get(`/api/images/${UNASSIGNED}/secret`, admin)).statusCode, 400)
+    assert.equal((await get('/api/images/..%2Fsecret.txt/original', admin)).statusCode, 400)
+  })
+
+  test('수신 완료(DONE)가 아닌 이미지는 관리자도 받을 수 없다', async () => {
+    const { pool } = await import('../src/db.mjs')
+    await pool.query("UPDATE images SET ingest_status = 'FAILED' WHERE image_key = $1", [UNASSIGNED])
+    try {
+      assert.equal((await get(`/api/images/${UNASSIGNED}/original`, admin)).statusCode, 404)
+    } finally {
+      await pool.query("UPDATE images SET ingest_status = 'DONE' WHERE image_key = $1", [UNASSIGNED])
+    }
+  })
+
+  test('DB 경로가 서빙 폴더 밖을 가리켜도 내려주지 않는다', async () => {
+    const { pool } = await import('../src/db.mjs')
+    await pool.query("UPDATE images SET original_path = '../secret.txt' WHERE image_key = $1", [UNASSIGNED])
+    try {
+      assert.equal((await get(`/api/images/${UNASSIGNED}/original`, admin)).statusCode, 404)
+    } finally {
+      await pool.query("UPDATE images SET original_path = 'originals/img_0001.svg' WHERE image_key = $1", [UNASSIGNED])
+    }
+  })
+
+  test('이미지 목록 응답의 URL은 새 API 주소다', async () => {
+    const code = (await api('GET', '/api/assignments', qa1)).body.items[0].id
+    const it = (await api('GET', `/api/assignments/${code}/images`, qa1)).body.items[0]
+    assert.equal(it.previewUrl, `/api/images/${it.imageId}/preview`)
+    assert.equal(it.thumbUrl, `/api/images/${it.imageId}/thumb`)
+    assert.equal(it.heatmapUrl, `/api/images/${it.imageId}/heatmap`)
   })
 })

@@ -1,12 +1,12 @@
 import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import jwt from '@fastify/jwt'
-import fastifyStatic from '@fastify/static'
 import { config } from './config.mjs'
 import { pool } from './db.mjs'
 import authRoutes from './routes/auth.mjs'
 import assignmentRoutes from './routes/assignments.mjs'
 import imageRoutes from './routes/images.mjs'
+import fileRoutes from './routes/files.mjs'
 import monitoringRoutes from './routes/monitoring.mjs'
 
 export async function buildApp(opts = {}) {
@@ -47,12 +47,7 @@ export async function buildApp(opts = {}) {
   await app.register(assignmentRoutes, { prefix: '/api' })
   await app.register(imageRoutes, { prefix: '/api' })
   await app.register(monitoringRoutes, { prefix: '/api' })
-
-  // 이미지/히트맵 파일: 로그인한 사용자만
-  await app.register(async (scope) => {
-    scope.addHook('onRequest', app.authenticate)
-    await scope.register(fastifyStatic, { root: config.filesDir, prefix: '/files/', index: false, list: false })
-  })
+  await app.register(fileRoutes, { prefix: '/api' })
 
   app.addHook('onClose', async () => {
     await pool.end()
