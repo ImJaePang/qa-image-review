@@ -290,3 +290,10 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 - **사본 생성 실패는 수신 실패가 아니다**: 경로를 NULL로 두고 DONE 처리 → 파일 API가 원본으로 대신 내려준다(결과 객체의 `derived: false`로 확인 가능). 판정은 원본 기준이므로 사본 문제로 검수를 막지 않는다.
 - 이미 수신된 이미지는 `npm run make-derivatives`(사본 없는 DONE 건만, 재실행 안전). 개발 DB의 목 SVG 3천 장: 실패 0, 약 333초(GPU 생성 병행 중 측정).
 - 박스 좌표는 원본 픽셀 기준이므로, 화면은 사본이 아니라 `images.width/height`(원본 크기)를 기준으로 오버레이를 계산해야 한다(⑤에서 확인할 것).
+
+### ③ 구현 결과 (2026-11-03)
+- `backend/scripts/generate-real.mjs`로 300장 생성(72분, 실패 0): 정상 203 + 오류 97(32%). 오류 박스 분포: 6종이 각 26~33개로 고르게 나옴. 출력 `data/images/real/`(git 제외, 752MB): `original/`(검수 대상 PNG 1344×768), `base/`(오류 이미지의 정상본), `ground_truth.jsonl`(시드·프롬프트·정답 박스·오류 종류).
+- 모델: Z-Image-Turbo bf16 + 증류 LoRA(Z-Image-Fun-Lora-Distill-2603) 4스텝. 정상 11~16초/장. 인페인팅 전용 모델(Fun-Controlnet-Union)은 "주변과 자연스럽게 섞는" 용도라 의도적으로 눈에 띄는 오류를 만들려는 목적과 맞지 않아 쓰지 않았다.
+- 오류 생성: TEXTURE_ANOMALY·SHAPE_DISTORTION·PART_COUNT_MISMATCH = 마스크 인페인팅(ComfyUI), COMPOSITE_EDGE·LIGHTING_MISMATCH·SCALE_ANOMALY = sharp 합성. 박스 밖은 정상본과 동일.
+- **품질 평가(오류가 너무 티 나는지/미묘한지)는 아직 하지 않았다** — 사용자 판단 보류. 강도 조정은 스크립트의 `INPAINT_DENOISE`와 `compositeDefect`의 상수로 한다.
+- 다음: 이 PNG를 수신 폴더(inbox)에 넣어 워커가 실제로 처리하는지 확인(PNG 수신 경로, 사본 생성 시간 실측).
