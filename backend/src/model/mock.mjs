@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import sharp from 'sharp'
-import { REASON_CODES, assertValidResult } from './contract.mjs'
+import { CAUSE_CODES, assertValidResult } from './contract.mjs'
 
 const round2 = (v) => Math.round(v * 100) / 100
 
@@ -72,7 +72,7 @@ export function createMockAdapter({ modelVersion = 'mock-v1', defectRatio = 0.3 
             width: w,
             height: h,
             score: round2(0.15 + r() * 0.6),
-            reasonCode: REASON_CODES[Math.floor(r() * REASON_CODES.length)],
+            reasonCode: CAUSE_CODES[Math.floor(r() * CAUSE_CODES.length)],
           })
         }
         overall = Math.min(...boxes.map((b) => b.score))

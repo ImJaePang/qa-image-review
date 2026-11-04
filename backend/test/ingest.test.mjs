@@ -517,3 +517,18 @@ test('목 어댑터: PNG는 실제 픽셀 크기를 기록한다 (박스 좌표�
   const boxes = (await pool.query('SELECT x, y, width, height FROM detections d JOIN model_runs m ON m.id = d.run_id WHERE m.image_id = $1', [row.id])).rows
   for (const b of boxes) assert.ok(b.x + b.width <= 800 && b.y + b.height <= 600) // 박스가 이미지 안에 있다
 })
+
+test('processOne: 원인 미분류(UNKNOWN) 박스도 저장되고 판정 사유에 남는다', async () => {
+  const t = await setup()
+  t.drop('a.svg')
+  await t.scan()
+  const boxes = [{ x: 10, y: 20, width: 100, height: 50, score: 0.3, reasonCode: 'UNKNOWN' }]
+  const r = await t.process(fixedAdapter([0.3], { boxes }))
+  assert.equal(r.status, 'DONE')
+  const row = await img(r.imageKey)
+  const run = (await pool.query(`SELECT id FROM model_runs WHERE image_id = $1`, [row.id])).rows[0]
+  const det = (await pool.query(`SELECT reason_code FROM detections WHERE run_id = $1`, [run.id])).rows
+  assert.deepEqual(det, [{ reason_code: 'UNKNOWN' }])
+  const v = (await pool.query(`SELECT reasons FROM verdicts WHERE run_id = $1`, [run.id])).rows[0]
+  assert.deepEqual(v.reasons, ['UNKNOWN'])
+})

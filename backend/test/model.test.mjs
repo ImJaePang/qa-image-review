@@ -28,7 +28,7 @@ test('계약 위반을 모두 잡는다', () => {
     [(r) => (r.overallScore = 1.2), /overallScore/],
     [(r) => (r.width = 0), /width/],
     [(r) => (r.boxes = null), /boxes/],
-    [(r) => (r.boxes[0].reasonCode = 'UNKNOWN'), /reasonCode/],
+    [(r) => (r.boxes[0].reasonCode = 'NOT_A_REASON'), /reasonCode/],
     [(r) => (r.boxes[0].x = 1800), /범위를 벗어남/], // 1800 + 180 > 1920
     [(r) => (r.boxes[0].width = 0), /크기는 양수/],
     [(r) => (r.boxes[0].x = 10.5), /정수/], // 좌표는 원본 픽셀(정수)
@@ -82,4 +82,12 @@ test('목 어댑터: 읽을 수 없는 파일은 예외로 실패를 알린다',
     createMockAdapter().infer({ imageKey: 'k', fileName: 'f.png', filePath: join(out, 'none.svg'), outputDir: out }),
     /ENOENT/,
   )
+})
+
+test('사유 코드 UNKNOWN(원인 미분류)은 계약상 유효하다 — 위치만 알려주는 모델용', () => {
+  const r = valid()
+  r.boxes[0].reasonCode = 'UNKNOWN'
+  assert.deepEqual(validateResult(r), [])
+  r.boxes[0].reasonCode = 'SOMETHING_ELSE'
+  assert.match(validateResult(r).join(' | '), /알 수 없는 사유 코드/)
 })

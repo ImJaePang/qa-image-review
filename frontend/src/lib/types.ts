@@ -8,6 +8,7 @@ export type ReasonCode =
   | 'TEXTURE_ANOMALY'
   | 'SCALE_ANOMALY'
   | 'PART_COUNT_MISMATCH'
+  | 'UNKNOWN'
 
 export type Verdict = '정상' | '의심' | '불량'
 

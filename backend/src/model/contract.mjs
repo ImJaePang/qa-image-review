@@ -1,7 +1,8 @@
 // 모델 출력 계약 (기획서 5장). 어떤 모델 어댑터든 이 형식으로 결과를 돌려줘야 하고,
 // 워커는 DB에 넣기 전에 assertValidResult로 검사한다 (계약을 어기면 그 이미지는 실패 처리).
 
-export const REASON_CODES = [
+// 원인을 구분하는 모델이 낼 수 있는 사유 (생성 데이터셋·목 모델이 쓴다)
+export const CAUSE_CODES = [
   'COMPOSITE_EDGE',
   'SHAPE_DISTORTION',
   'LIGHTING_MISMATCH',
@@ -9,6 +10,8 @@ export const REASON_CODES = [
   'SCALE_ANOMALY',
   'PART_COUNT_MISMATCH',
 ]
+// UNKNOWN = 원인 미분류. 위치만 알려주고 이유는 구분하지 못하는 이상 탐지 모델(PatchCore 등)용
+export const REASON_CODES = [...CAUSE_CODES, 'UNKNOWN']
 
 const isInt = (v) => Number.isInteger(v)
 const isScore = (v) => typeof v === 'number' && v >= 0 && v <= 1

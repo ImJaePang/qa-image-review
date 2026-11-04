@@ -20,6 +20,7 @@ export const REASON_LABELS: Record<ReasonCode, string> = {
   TEXTURE_ANOMALY: '질감 이상',
   SCALE_ANOMALY: '비율/스케일 이상',
   PART_COUNT_MISMATCH: '부품 개수 불일치',
+  UNKNOWN: '원인 미분류',
 }
 
 export function fmtDate(iso: string) {
