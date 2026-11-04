@@ -132,3 +132,40 @@ describe('서버 검사가 같은 표를 쓴다', () => {
     await put('researcher', base)
   })
 })
+
+describe('권한 종류는 roles 테이블이 정한다 (코드에 고정 목록 없음)', () => {
+  test('가입 화면용 목록(로그인 전)은 신청 가능한 권한만, 전체 목록(로그인 후)은 시스템 여부까지', async () => {
+    const s = (await api('GET', '/api/auth/signup-roles')).body.roles
+    assert.deepEqual(s.map((r) => r.code), ['researcher', 'qa']) // 관리자는 신청 불가
+    assert.equal((await api('GET', '/api/roles')).status, 401)
+    const all = (await api('GET', '/api/roles', qa1)).body.roles
+    assert.deepEqual(all.map((r) => [r.code, r.label, r.system, r.signupSelectable]), [['admin', '관리자', true, false], ['researcher', '연구원', false, true], ['qa', 'QA', false, true]])
+  })
+
+  test('roles에 한 줄 추가하면 코드 변경 없이 표·가입·승인·수정·필터에 쓸 수 있다', async () => {
+    await pool.query(`INSERT INTO roles (code, label, sort_order, signup_selectable) VALUES ('auditor', '감사', 4, true)`)
+    // 권한 표에 새 열이 생기고 권한 코드를 줄 수 있다
+    assert.deepEqual((await api('GET', '/api/admin/permissions', admin)).body.roles.map((r) => r.code), ['admin', 'researcher', 'qa', 'auditor'])
+    assert.equal((await put('auditor', ['dashboard.view'])).status, 200)
+    // 가입 신청 → 승인 → 로그인 → 메뉴
+    assert.equal((await api('POST', '/api/auth/signup', null, { name: '감사원', email: 'aud@example.com', password: '1234', requestedRole: 'auditor' })).status, 201)
+    const id = Number((await pool.query(`SELECT id FROM users WHERE email = 'aud@example.com'`)).rows[0].id)
+    assert.equal((await api('POST', '/api/admin/users/bulk', admin, { action: 'APPROVE', ids: [id] })).body.processed, 1)
+    const { headers } = await loginAs(app, 'aud@example.com')
+    assert.deepEqual(paths((await api('GET', '/api/menus/mine', headers)).body.menus), ['/home/dashboard'])
+    // 목록 필터와 수정
+    assert.equal((await api('GET', '/api/admin/users?role=auditor', admin)).body.total, 1)
+    assert.equal((await api('PATCH', `/api/admin/users/${id}`, admin, { role: 'qa' })).body.role, 'qa')
+  })
+
+  test('없는 권한·신청 불가 권한은 400 (가입·승인·수정)', async () => {
+    const signup = (requestedRole) => api('POST', '/api/auth/signup', null, { name: 'x', email: `${requestedRole}@example.com`, password: '1234', requestedRole })
+    assert.equal((await signup('boss')).status, 400)
+    assert.equal((await signup('admin')).status, 400)
+    await pool.query(`UPDATE roles SET signup_selectable = false WHERE code = 'auditor'`)
+    assert.equal((await signup('auditor')).status, 400) // 플래그를 끄면 가입 신청에서 빠진다
+    const id = (await pool.query(`SELECT id FROM users WHERE email = 'qa1@example.com'`)).rows[0].id
+    assert.equal((await api('PATCH', `/api/admin/users/${id}`, admin, { role: 'boss' })).status, 400)
+    assert.equal((await api('POST', '/api/admin/users/bulk', admin, { action: 'APPROVE', ids: [Number(id)], role: 'boss' })).status, 400)
+  })
+})

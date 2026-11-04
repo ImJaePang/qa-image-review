@@ -1,6 +1,17 @@
 // 계정 상태 규칙 (설계 9장). 로그인·토큰 확인·사용자 목록이 같은 기준을 쓰도록 한곳에 둔다.
-export const ROLES = ['admin', 'researcher', 'qa']
-export const SIGNUP_ROLES = ['researcher', 'qa'] // 가입 때 신청할 수 있는 권한 (관리자는 신청 불가)
+// 권한 종류는 roles 테이블이 정한다(코드에 목록을 두지 않는다). 아래는 목록이 아니라 '기본값' 하나뿐:
+// 가입한 직후 실제 권한은 승인 전까지 쓸 수 없는 상태로 두고, 신청이 없을 때의 기본 신청 권한이다.
+export const DEFAULT_ROLE = 'qa'
+
+/** 권한 코드가 roles에 있는지 확인한다. signupOnly면 가입 때 신청할 수 있는 권한(signup_selectable)만 허용. 아니면 400 */
+export async function assertRole(db, code, { signupOnly = false } = {}) {
+  const { rows } = await db.query('SELECT signup_selectable FROM roles WHERE code = $1', [code])
+  if (!rows.length || (signupOnly && !rows[0].signup_selectable)) {
+    const err = new Error(signupOnly ? '신청할 수 없는 권한입니다.' : '알 수 없는 권한입니다.')
+    err.statusCode = 400
+    throw err
+  }
+}
 export const EXPIRY_YEARS = 1
 export const STATUSES = ['PENDING', 'ACTIVE', 'EXPIRED', 'DISABLED']
 

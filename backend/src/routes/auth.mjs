@@ -1,7 +1,7 @@
 import { pool } from '../db.mjs'
 import { config } from '../config.mjs'
 import { httpError } from '../errors.mjs'
-import { BLOCKED_MESSAGE, EXPIRY_YEARS, PROFILE_FIELDS, SIGNUP_ROLES, effectiveStatus, rejectUnknownProfile } from '../account.mjs'
+import { BLOCKED_MESSAGE, DEFAULT_ROLE, EXPIRY_YEARS, PROFILE_FIELDS, assertRole, effectiveStatus, rejectUnknownProfile } from '../account.mjs'
 import { txWith } from '../tx.mjs'
 import { loadPermissions } from '../permissions.mjs'
 
@@ -68,7 +68,7 @@ export default async function authRoutes(app) {
             name: { type: 'string', minLength: 1, maxLength: 50 },
             email: { type: 'string', minLength: 3, maxLength: 200 },
             password: { type: 'string', minLength: 4, maxLength: 200 },
-            requestedRole: { enum: SIGNUP_ROLES },
+            requestedRole: { type: 'string', maxLength: 50 }, // 가입 신청 가능한 권한인지는 DB(roles.signup_selectable)로 검사
             // 소속·연락처는 모두 선택 항목
             profile: {
               type: 'object',
@@ -80,12 +80,13 @@ export default async function authRoutes(app) {
       },
     },
     async (req, reply) => {
-      const { name, email, password, requestedRole = 'qa', profile = {} } = req.body
+      const { name, email, password, requestedRole = DEFAULT_ROLE, profile = {} } = req.body
+      await assertRole(pool, requestedRole, { signupOnly: true })
       try {
         await txWith(pool, async (client) => {
           const { rows } = await client.query(
-            `INSERT INTO users (name, email, password_hash, role, status, requested_role) VALUES ($1, $2, crypt($3, gen_salt('bf')), 'qa', 'PENDING', $4) RETURNING id`,
-            [name.trim(), email.trim(), password, requestedRole],
+            `INSERT INTO users (name, email, password_hash, role, status, requested_role) VALUES ($1, $2, crypt($3, gen_salt('bf')), $5, 'PENDING', $4) RETURNING id`,
+            [name.trim(), email.trim(), password, requestedRole, DEFAULT_ROLE],
           )
           const cols = Object.values(PROFILE_FIELDS)
           await client.query(`INSERT INTO user_profiles (user_id, ${cols.join(', ')}) VALUES ($1, ${cols.map((_, i) => `$${i + 2}`).join(', ')})`, [
@@ -122,6 +123,18 @@ export default async function authRoutes(app) {
       return { ok: true, message: '만료 해제를 요청했습니다. 관리자가 처리하면 로그인할 수 있습니다.' }
     },
   )
+
+  // 가입 화면용(로그인 전): 신청할 수 있는 권한 목록
+  app.get('/auth/signup-roles', async () => {
+    const { rows } = await pool.query('SELECT code, label FROM roles WHERE signup_selectable ORDER BY sort_order, code')
+    return { roles: rows }
+  })
+
+  // 전체 권한 목록(로그인 후): 화면의 이름 표시·선택지에 쓴다
+  app.get('/roles', { onRequest: app.authenticate }, async () => {
+    const { rows } = await pool.query('SELECT code, label, is_system, signup_selectable FROM roles ORDER BY sort_order, code')
+    return { roles: rows.map((r) => ({ code: r.code, label: r.label, system: r.is_system, signupSelectable: r.signup_selectable })) }
+  })
 
   app.post('/auth/logout', async (req, reply) => {
     reply.clearCookie('token', { path: '/' })

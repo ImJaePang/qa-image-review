@@ -4,7 +4,7 @@
 //  - 관리자가 한 명도 남지 않게 되는 처리는 통째로 취소한다 (409).
 //  - 모든 변경은 user_history에 누가·무엇을 남긴다.
 import { randomInt } from 'node:crypto'
-import { EFFECTIVE_STATUS_SQL, EXPIRY_YEARS, PROFILE_FIELDS, ROLES, STATUSES, rejectUnknownProfile } from '../account.mjs'
+import { DEFAULT_ROLE, EFFECTIVE_STATUS_SQL, EXPIRY_YEARS, PROFILE_FIELDS, STATUSES, assertRole, rejectUnknownProfile } from '../account.mjs'
 import { pool } from '../db.mjs'
 import { httpError } from '../errors.mjs'
 import { pagingQuery } from '../paging.mjs'
@@ -85,7 +85,7 @@ export default async function userAdminRoutes(app) {
       schema: {
         querystring: {
           type: 'object',
-          properties: { status: { enum: STATUSES }, role: { enum: ROLES }, q: { type: 'string', maxLength: 100 }, ...pagingQuery },
+          properties: { status: { enum: STATUSES }, role: { type: 'string', maxLength: 50 }, q: { type: 'string', maxLength: 100 }, ...pagingQuery },
         },
       },
     },
@@ -127,13 +127,14 @@ export default async function userAdminRoutes(app) {
         body: {
           type: 'object',
           minProperties: 1,
-          properties: { name: { type: 'string', minLength: 1, maxLength: 50 }, role: { enum: ROLES }, expiresAt: { type: 'string', maxLength: 40 }, profile: profileSchema },
+          properties: { name: { type: 'string', minLength: 1, maxLength: 50 }, role: { type: 'string', maxLength: 50 }, expiresAt: { type: 'string', maxLength: 40 }, profile: profileSchema },
         },
       },
     },
     async (req) => {
       const { id } = req.params
       const b = req.body
+      if (b.role !== undefined) await assertRole(pool, b.role)
       let newExpires
       if (b.expiresAt !== undefined) {
         newExpires = new Date(b.expiresAt)
@@ -201,7 +202,7 @@ export default async function userAdminRoutes(app) {
           properties: {
             action: { enum: Object.keys(BULK) },
             ids: { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1, maxItems: BULK_MAX, uniqueItems: true },
-            role: { enum: ROLES },
+            role: { type: 'string', maxLength: 50 },
           },
         },
       },
@@ -209,6 +210,7 @@ export default async function userAdminRoutes(app) {
     async (req) => {
       const { action, ids, role } = req.body
       if (role && action !== 'APPROVE') throw httpError(400, '권한 지정은 승인에만 쓸 수 있습니다.')
+      if (role) await assertRole(pool, role)
       const rule = BULK[action]
       const actor = req.user.sub
       return txWith(pool, async (client) => {
@@ -230,7 +232,7 @@ export default async function userAdminRoutes(app) {
             skipped.push({ id: String(id), name: u.name, reason: `${STATUS_LABEL[u.eff_status]} 상태에서는 할 수 없습니다.` })
             continue
           }
-          const newRole = action === 'APPROVE' ? (role ?? u.requested_role ?? 'qa') : u.role
+          const newRole = action === 'APPROVE' ? (role ?? u.requested_role ?? DEFAULT_ROLE) : u.role
           const activating = rule.to === 'ACTIVE'
           // 활성화(승인·재활성·만료 해제)는 사용기한을 오늘 + 1년으로 새로 잡는다
           await client.query(

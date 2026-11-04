@@ -82,7 +82,7 @@ cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api는 API
 
 ## 테스트
 ```
-cd backend && npm test      # 백엔드 테스트 168개 (API 통합, 파일 API, 연계 관리, 규칙 관리, 사본 생성, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
+cd backend && npm test      # 백엔드 테스트 171개 (API 통합, 파일 API, 연계 관리, 규칙 관리, 사본 생성, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
 cd frontend && npm test     # 단위 테스트 32개 (영문 코드↔한글 매핑, 페이징, 사용자 관리 문구 등)
 cd frontend && npx tsc -b   # 타입 체크
 ```
