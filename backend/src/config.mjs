@@ -13,6 +13,9 @@ export const config = {
   ingestRoot: resolve(e.INGEST_ROOT ?? resolve(e.FILES_DIR ?? resolve(import.meta.dirname, '../../data/images'), 'ingest')),
   ruleName: e.RULE_NAME ?? 'score-threshold',
   modelAdapter: e.MODEL_ADAPTER ?? 'mock',
+  // MODEL_ADAPTER=patchcore일 때: 학습 결과 폴더와 파이썬 실행 파일 (없으면 python/ 아래 기본값)
+  patchcoreModelDir: e.PATCHCORE_MODEL_DIR || undefined,
+  pythonBin: e.PYTHON_BIN || undefined,
   db: {
     host: e.POSTGRES_HOST ?? 'localhost',
     port: Number(e.POSTGRES_PORT ?? 5432),

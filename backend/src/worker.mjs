@@ -13,7 +13,7 @@ pg.types.setTypeParser(20, Number)
 pg.types.setTypeParser(1700, Number)
 
 const pool = new pg.Pool(config.db)
-const adapter = loadAdapter(config.modelAdapter)
+const adapter = loadAdapter(config.modelAdapter, { patchcoreModelDir: config.patchcoreModelDir, pythonBin: config.pythonBin })
 const log = (m) => console.log(`${new Date().toISOString()} ${m}`)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -60,6 +60,7 @@ async function main() {
       await sleep(5000)
     }
   }
+  adapter.close?.() // 추론 프로세스 정리
   await lock.release()
   await pool.end()
   log('워커 종료')
