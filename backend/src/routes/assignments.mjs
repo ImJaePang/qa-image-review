@@ -2,16 +2,17 @@ import { pool, tx } from '../db.mjs'
 import { httpError } from '../errors.mjs'
 import { LATEST_RUN, latestVerdict } from '../sql.mjs'
 import { pagingQuery } from '../paging.mjs'
+import { can, requireAnyPermission } from '../permissions.mjs'
 
 const STATUSES = ['ASSIGNED', 'IN_REVIEW', 'REVIEWED', 'CONFIRMED']
 const VERDICTS = ['NORMAL', 'SUSPECT', 'DEFECT']
 
-// 현재 상태 → 다음 상태. who: admin = 관리자만, assignee = 담당자 또는 관리자
+// 현재 상태 → 다음 상태. who: manager = 'assignment.manage' 권한자만, assignee = 담당자 또는 그 권한자
 const TRANSITIONS = {
   // 이미지는 수신 시점에 이미 추론·판정되어 있어 배정 뒤 사전배치 단계가 없다 (db/migrations/002)
   ASSIGNED: { to: 'IN_REVIEW', who: 'assignee', action: '점검 시작' },
   IN_REVIEW: { to: 'REVIEWED', who: 'assignee', action: '점검 완료' },
-  REVIEWED: { to: 'CONFIRMED', who: 'admin', action: '확인 완료' },
+  REVIEWED: { to: 'CONFIRMED', who: 'manager', action: '확인 완료' },
 }
 
 const ASSIGNMENT_COLS = `
@@ -34,8 +35,8 @@ const toListItem = (r) => ({
   },
 })
 
-export const isAdmin = (user) => user.role === 'admin'
-export const canAct = (user, a) => isAdmin(user) || String(a.assignee_id) === String(user.sub)
+export const canManage = (user) => can(user, 'assignment.manage')
+export const canAct = (user, a) => canManage(user) || String(a.assignee_id) === String(user.sub)
 
 export async function findAssignment(db, code, lock = false) {
   const { rows } = await db.query(
@@ -55,6 +56,8 @@ export const codeParam = {
 export default async function assignmentRoutes(app) {
   // 이 플러그인의 모든 라우트는 로그인 필요
   app.addHook('onRequest', app.authenticate)
+  // 배정 화면(배정 리스트 / 내 배정)을 쓸 수 있는 권한이 있어야 배정 API를 쓸 수 있다
+  app.addHook('onRequest', requireAnyPermission(['assignment.view', 'my_assignment.view']))
 
   // 목록: 상태 필터·검색·페이지, 상태별 건수(요약 카드용)
   app.get(
@@ -163,7 +166,7 @@ export default async function assignmentRoutes(app) {
       },
     },
     async (req, reply) => {
-      if (!isAdmin(req.user)) throw httpError(403, '관리자만 배정할 수 있습니다.')
+      if (!canManage(req.user)) throw httpError(403, '배정 권한이 없습니다.')
       const { title, assigneeId, dueDate, verdicts, count } = req.body
       if (!/^\d+$/.test(String(assigneeId))) throw httpError(400, '담당자가 올바르지 않습니다.')
 
@@ -228,8 +231,8 @@ export default async function assignmentRoutes(app) {
         const a = await findAssignment(db, req.params.code, true)
         const t = TRANSITIONS[a.status]
         if (!t || t.to !== req.body.to) throw httpError(409, '현재 상태에서 변경할 수 없는 단계입니다.')
-        if (t.who === 'admin' ? !isAdmin(req.user) : !canAct(req.user, a))
-          throw httpError(403, t.who === 'admin' ? '관리자만 할 수 있습니다.' : '담당자만 할 수 있습니다.')
+        if (t.who === 'manager' ? !canManage(req.user) : !canAct(req.user, a))
+          throw httpError(403, t.who === 'manager' ? '배정 관리 권한이 필요합니다.' : '담당자만 할 수 있습니다.')
 
         if (a.status === 'IN_REVIEW') {
           const { rows } = await db.query(

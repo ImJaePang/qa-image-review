@@ -5,7 +5,7 @@ import { pool } from '../db.mjs'
 import { config } from '../config.mjs'
 import { httpError } from '../errors.mjs'
 import { LATEST_RUN } from '../sql.mjs'
-import { isAdmin } from './assignments.mjs'
+import { can } from '../permissions.mjs'
 
 // 이미지 ID 기반 파일 API (design.md 9장 ②). URL에는 디스크 경로가 나오지 않고,
 // 서버가 DB에서 파일 위치를 찾아 내려준다.
@@ -61,8 +61,8 @@ export default async function fileRoutes(app) {
       const img = rows[0]
       if (!img || img.ingest_status !== 'DONE') throw httpError(404, '이미지를 찾을 수 없습니다.')
 
-      // 관리자는 전부, QA는 자기에게 배정된 이미지만
-      if (!isAdmin(req.user)) {
+      // 'image.view_all' 권한자는 전부, 그 외는 자기에게 배정된 이미지만
+      if (!can(req.user, 'image.view_all')) {
         const own = await pool.query(
           `SELECT 1 FROM assignment_images ai JOIN assignments a ON a.id = ai.assignment_id
            WHERE ai.image_id = $1 AND a.assignee_id = $2 LIMIT 1`,

@@ -3,6 +3,7 @@ import { config } from '../config.mjs'
 import { httpError } from '../errors.mjs'
 import { BLOCKED_MESSAGE, EXPIRY_YEARS, PROFILE_FIELDS, SIGNUP_ROLES, effectiveStatus, rejectUnknownProfile } from '../account.mjs'
 import { txWith } from '../tx.mjs'
+import { loadPermissions } from '../permissions.mjs'
 
 const toUser = (r) => ({ id: String(r.id), name: r.name, email: r.email, role: r.role })
 
@@ -49,7 +50,7 @@ export default async function authRoutes(app) {
       await pool.query(`UPDATE users SET last_login_at = now(), expires_at = now() + make_interval(years => $2) WHERE id = $1`, [rows[0].id, EXPIRY_YEARS])
       const user = toUser(rows[0])
       setToken(reply, user)
-      return { user }
+      return { user: { ...user, permissions: [...(await loadPermissions(pool, user.role))].sort() } }
     },
   )
 
@@ -130,7 +131,7 @@ export default async function authRoutes(app) {
   app.get('/auth/me', { onRequest: app.authenticate }, async (req) => {
     const { rows } = await pool.query('SELECT id, name, email, role FROM users WHERE id = $1', [req.user.sub])
     if (!rows.length) throw httpError(401, '로그인이 필요합니다.')
-    return { user: toUser(rows[0]) }
+    return { user: { ...toUser(rows[0]), permissions: [...req.user.permissions].sort() } }
   })
 
   // 담당자 선택용 사용자 목록 (사용 중인 계정만)

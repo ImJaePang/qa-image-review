@@ -5,7 +5,7 @@
 //  - 모델: model_runs.duration_ms, 수신 배치: ingest_batches 시작/종료 시각. (과거 batch_jobs=사전배치 기록은 더 이상 쓰지 않는다)
 import { pool } from '../db.mjs'
 import { httpError } from '../errors.mjs'
-import { isAdmin } from './assignments.mjs'
+import { can } from '../permissions.mjs'
 
 // 검수 행마다 직전 검수와의 간격(초). 번복(같은 이미지 재검수)도 하나의 작업으로 본다.
 const GAPS = `
@@ -32,7 +32,7 @@ export default async function monitoringRoutes(app) {
       },
     },
     async (req) => {
-      if (!isAdmin(req.user)) throw httpError(403, '관리자만 볼 수 있습니다.')
+      if (!can(req.user, 'monitoring.view')) throw httpError(403, '권한이 없습니다.')
       const { gapMinutes } = req.query
       const limit = gapMinutes * 60
 

@@ -5,6 +5,8 @@ import { config } from './config.mjs'
 import { pool } from './db.mjs'
 import { httpError } from './errors.mjs'
 import { isUsable } from './account.mjs'
+import { loadPermissions } from './permissions.mjs'
+import permissionRoutes from './routes/permissions.mjs'
 import authRoutes from './routes/auth.mjs'
 import assignmentRoutes from './routes/assignments.mjs'
 import imageRoutes from './routes/images.mjs'
@@ -37,6 +39,7 @@ export async function buildApp(opts = {}) {
     if (!rows.length || !isUsable(rows[0])) throw httpError(401, '로그인이 필요합니다.')
     request.user.role = rows[0].role
     request.user.name = rows[0].name
+    request.user.permissions = await loadPermissions(pool, rows[0].role) // 권한 코드는 DB의 현재 값
   })
 
   // 에러 응답은 항상 { message } 형태
@@ -59,6 +62,7 @@ export async function buildApp(opts = {}) {
   await app.register(integrationRoutes, { prefix: '/api' })
   await app.register(ruleRoutes, { prefix: '/api' })
   await app.register(userAdminRoutes, { prefix: '/api' })
+  await app.register(permissionRoutes, { prefix: '/api' })
   await app.register(fileRoutes, { prefix: '/api' })
 
   app.addHook('onClose', async () => {

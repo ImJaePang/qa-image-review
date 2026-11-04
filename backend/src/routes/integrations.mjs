@@ -8,7 +8,7 @@ import { httpError } from '../errors.mjs'
 import { DEFAULT_FOLDER_CONFIG, resolveFolderConfig } from '../ingest/folder-config.mjs'
 import { retryFailed } from '../ingest/retry.mjs'
 import { txWith } from '../tx.mjs'
-import { isAdmin } from './assignments.mjs'
+import { requirePermission } from '../permissions.mjs'
 
 const CONFIG_KEYS = Object.keys(DEFAULT_FOLDER_CONFIG)
 const DIR_KEYS = ['watchDir', 'processingDir', 'doneDir', 'failedDir']
@@ -92,9 +92,7 @@ const idParams = { type: 'object', properties: { id: { type: 'integer', minimum:
 
 export default async function integrationRoutes(app) {
   app.addHook('onRequest', app.authenticate)
-  app.addHook('onRequest', async (req) => {
-    if (!isAdmin(req.user)) throw httpError(403, '관리자만 사용할 수 있습니다.')
-  })
+  app.addHook('onRequest', requirePermission('integration.manage'))
 
   // Fastify의 스키마 검증은 모르는 항목을 조용히 지워 버린다. 설정 오타(예: scanInterval)가 저장된 것처럼 보이지 않도록 먼저 거부한다.
   app.addHook('preValidation', async (req) => {

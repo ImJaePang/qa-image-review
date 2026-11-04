@@ -9,7 +9,7 @@ import { pool } from '../db.mjs'
 import { httpError } from '../errors.mjs'
 import { pagingQuery } from '../paging.mjs'
 import { txWith } from '../tx.mjs'
-import { isAdmin } from './assignments.mjs'
+import { requirePermission } from '../permissions.mjs'
 
 export const BULK_MAX = 100
 const EFF = EFFECTIVE_STATUS_SQL('u')
@@ -76,9 +76,7 @@ async function loadOne(db, id) {
 
 export default async function userAdminRoutes(app) {
   app.addHook('onRequest', app.authenticate)
-  app.addHook('onRequest', async (req) => {
-    if (!isAdmin(req.user)) throw httpError(403, '관리자만 사용할 수 있습니다.')
-  })
+  app.addHook('onRequest', requirePermission('user.manage'))
 
   // 목록 + 상태별 건수(전체 사용자 기준, 필터 칩의 숫자용)
   app.get(

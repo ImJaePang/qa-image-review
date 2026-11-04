@@ -359,6 +359,15 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 2. 사용자 관리 화면 (+ 만료 해제 요청)
 3. 권한·메뉴 테이블, 권한별 메뉴 관리 화면, API 권한 검사 전환, 연구원 업로드
 
+### 3단계 API 구현 메모 (마이그레이션 007)
+- **권한 판단의 단일 근거는 `role_permissions`(권한 × 권한 코드)**. 코드에는 "관리자인가"가 아니라 "이 권한 코드가 있는가"만 쓴다(`src/permissions.mjs`의 `can`, `requirePermission`, `requireAnyPermission`). `authenticate`가 요청마다 DB에서 권한 코드를 읽으므로 표를 바꾸면 로그인 중인 사용자에게도 다음 요청부터 적용된다.
+- 권한 코드는 두 종류. MENU: 메뉴 하나에 하나씩(`dashboard.view`, `assignment.view`, `my_assignment.view`, `history.view`, `image_list.view`, `model_run.view`, `monitoring.view`, `rule.manage`, `integration.manage`, `user.manage`, `menu.manage`). FUNCTION: 메뉴와 별개의 동작(`assignment.manage` 배정 만들기·확인 완료·남의 배정 처리, `image.view_all` 배정 밖 이미지 열람, `image.upload` 업로드·준비 중).
+- 메뉴는 `menus` 테이블(상단/중메뉴/소메뉴/순서/경로/권한 코드)에 있고 `/api/menus/mine`이 내 권한으로 볼 수 있는 트리만 돌려준다. 권한 코드가 있어야 그 메뉴의 API도 쓸 수 있다 (규칙·연계·사용자·모니터링은 각 코드, 배정 API는 `assignment.view` 또는 `my_assignment.view`). 아직 화면이 없는 메뉴(대시보드 등)의 코드는 표에만 있다.
+- 기본 부여: 관리자 = 전부, 연구원 = 보기 메뉴 + 모델 실행 이력 + `image.view_all` + `image.upload`, QA = 보기 메뉴(대시보드·배정·내 배정·점검 이력·이미지 목록).
+- `PUT /admin/roles/:code/permissions`는 한 권한의 코드 전체를 교체한다(표에서 고친 것을 한 번에 저장). 바뀐 항목만 `permission_history`(GRANT/REVOKE)에 남긴다. **관리자는 `user.manage`·`menu.manage`를 뺄 수 없다**(409) — 아무도 설정을 못 바꾸게 되는 것을 막는다.
+- `users.role`은 `roles` 참조(FK)다. 권한 종류를 DB에서 늘릴 수 있게 되었지만, 권한 추가 화면과 `account.mjs`의 `ROLES`(검증용 고정 목록)·프론트 `ROLE_LABEL`은 아직 고정이라 **권한 종류 추가는 후속 과제**.
+- `/auth/me`·로그인 응답에 `permissions`(코드 배열)가 들어간다. 프론트의 `role === 'admin'` 비교(약 8곳)는 화면 커밋에서 이것으로 바꾼다.
+
 ### 2단계 화면 구현 메모
 - 목업 확정 후 구현. 상태 필터(칩)에 따라 열이 바뀌고(승인 대기: 신청 권한·신청일 / 만료: 만료일·마지막 로그인·해제 요청 …), 일괄 처리 버튼도 상태별로 정해진다(`lib/users.ts`의 `bulkActionsFor`). 전체 보기에서는 상태가 섞여 있어 일괄 처리를 숨긴다.
 - 선택은 필터·페이지가 바뀌면 비운다(보이지 않는 사용자를 처리하는 실수 방지). "조건에 맞는 전체 N명"은 1000건씩 id만 모아 선택하고, 처리할 때 100명씩 끊어 순서대로 호출해 결과를 합친다.

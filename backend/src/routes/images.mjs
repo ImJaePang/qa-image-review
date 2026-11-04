@@ -1,6 +1,7 @@
 import { pool, tx } from '../db.mjs'
 import { httpError } from '../errors.mjs'
 import { currentReview, latestVerdict } from '../sql.mjs'
+import { requireAnyPermission } from '../permissions.mjs'
 import { canAct, codeParam, findAssignment } from './assignments.mjs'
 
 const FILTERS = {
@@ -37,6 +38,7 @@ const toItem = (r) => ({
 
 export default async function imageRoutes(app) {
   app.addHook('onRequest', app.authenticate)
+  app.addHook('onRequest', requireAnyPermission(['assignment.view', 'my_assignment.view']))
 
   // 배정의 이미지 페이지 조회 (검수 화면 정렬 순서 = position)
   app.get(

@@ -9,7 +9,7 @@ import { pool } from '../db.mjs'
 import { httpError } from '../errors.mjs'
 import { judge } from '../rules.mjs'
 import { txWith } from '../tx.mjs'
-import { isAdmin } from './assignments.mjs'
+import { requirePermission } from '../permissions.mjs'
 
 const emptyCounts = () => ({ NORMAL: 0, SUSPECT: 0, DEFECT: 0 })
 
@@ -75,9 +75,7 @@ const history = (client, ruleId, action, detail, actorId) =>
 
 export default async function ruleRoutes(app) {
   app.addHook('onRequest', app.authenticate)
-  app.addHook('onRequest', async (req) => {
-    if (!isAdmin(req.user)) throw httpError(403, '관리자만 사용할 수 있습니다.')
-  })
+  app.addHook('onRequest', requirePermission('rule.manage'))
 
   // 규칙 버전 목록 + 활성 규칙 기준으로 다시 판정이 필요한 이미지 수
   app.get('/rules', async () => {
