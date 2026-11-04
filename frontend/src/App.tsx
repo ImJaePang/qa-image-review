@@ -9,6 +9,7 @@ import { AssignmentListPage } from '@/pages/AssignmentListPage'
 import { Placeholder } from '@/pages/Placeholder'
 import { IMPLEMENTED, MENU } from '@/config/menu'
 import { TimeAnalysisPage } from '@/pages/TimeAnalysisPage'
+import { IntegrationsPage } from '@/pages/IntegrationsPage'
 import { useAuth } from '@/stores/auth'
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } })
@@ -31,6 +32,7 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route path="/review/assignments" element={<AssignmentListPage />} />
               <Route path="/monitoring/time" element={<TimeAnalysisPage />} />
+              <Route path="/settings/integrations" element={<IntegrationsPage />} />
               {placeholderPaths.map((p) => (
                 <Route key={p} path={p} element={<Placeholder />} />
               ))}

@@ -1,6 +1,6 @@
 // 백엔드 API 호출. 화면 코드는 한글 값만 다루고, 변환은 mappers에서 한다.
 import type { AssignmentListItem, AssignmentStatus, ImageItem, User, Verdict } from '@/lib/types'
-import { get, post, put } from './client'
+import { get, patch, post, put } from './client'
 import {
   REVIEW_CODE,
   STATUS_CODE,
@@ -56,6 +56,51 @@ export interface TimeAnalysis {
     seconds: number | null
     secondsPerImage: number | null
   }[]
+}
+
+// ── 연계 관리 (관리자) ──
+export interface FolderConfig {
+  watchDir: string
+  processingDir: string
+  doneDir: string
+  failedDir: string
+  extensions: string[]
+  maxFileMB: number
+  scanIntervalSec: number
+}
+export interface Integration {
+  id: string
+  kind: 'FOLDER'
+  name: string
+  enabled: boolean
+  config: FolderConfig
+  counts: { pending: number; processing: number; done: number; failed: number }
+  lastReceivedAt: string | null
+  updatedAt: string
+}
+export interface IntegrationList {
+  /** 서버가 허용하는 루트 폴더. 연계의 폴더는 모두 이 아래의 상대 경로 */
+  root: string
+  defaults: FolderConfig
+  items: Integration[]
+}
+export interface IntegrationHistoryItem {
+  id: string
+  action: 'CREATE' | 'UPDATE' | 'ENABLE' | 'DISABLE' | 'RETRY'
+  changes: Record<string, any>
+  at: string
+  actor: string
+}
+export interface FailedImage {
+  imageKey: string
+  sourceName: string
+  error: string | null
+  receivedAt: string
+}
+export interface RetryResult {
+  retried: number
+  batchId: string | null
+  skipped: { imageKey: string; reason: string }[]
 }
 
 export type ImageFilter = 'all' | 'unreviewed' | 'approved' | 'rejected'
@@ -118,6 +163,15 @@ export const api = {
     )
     return { ...r, assignments: r.assignments.map((a) => ({ ...a, status: STATUS_KO[a.status] })) } as TimeAnalysis
   },
+  // ── 연계 관리 (관리자) ──
+  listIntegrations: () => get<IntegrationList>('/integrations'),
+  createIntegration: (input: { name: string; config: Partial<FolderConfig> }) => post<Integration>('/integrations', input),
+  updateIntegration: (id: string, input: { name?: string; enabled?: boolean; config?: Partial<FolderConfig> }) =>
+    patch<Integration>(`/integrations/${id}`, input),
+  integrationHistory: (id: string) => get<{ items: IntegrationHistoryItem[] }>(`/integrations/${id}/history`).then((r) => r.items),
+  integrationFailed: (id: string) => get<{ items: FailedImage[] }>(`/integrations/${id}/failed`).then((r) => r.items),
+  retryIntegration: (id: string) => post<RetryResult>(`/integrations/${id}/retry`),
+
   reviewImage: (id: string, imageId: string, status: '승인' | '반려', comment: string) =>
     put<{ progress: { reviewed: number; approved: number; rejected: number } }>(
       `/assignments/${id}/images/${imageId}/review`,

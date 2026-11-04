@@ -33,11 +33,11 @@ npm run dev
 6. [x] ④ 썸네일·미리보기(webp) 생성 (비율 유지) — 추론 후 `thumb_path`/`preview_path` 채움. 이미 수신된 이미지는 `npm run make-derivatives`
 7. [x] ⑤ 검수 화면: 보기 모드 토글(미리보기/원본 고정, 이웃 미리 받기) + 마지막 검수자·시각 표시 (`reviewerName`/`reviewedAt`은 API에 이미 있음)
 8. [x] ⑥ PRECHECKED 제거 (마이그레이션 002, 백엔드 `TRANSITIONS`·신규 배정 `ingest_status='DONE'` 조건, 프론트 4단계, 소요 시간 화면의 사전배치 → 수신 배치, 테스트)
-9. [ ] ⑦ 관리자 `연계 관리` 화면 (목업을 먼저 보여주고 사용자와 정한다)
+9. [x] ⑦ 관리자 `연계 관리` 화면 (설정 > 연계 > 연계 관리): 연계 목록·요약 건수, 추가·수정·켜기/끄기, 변경 이력, 실패 건 재시도. 마이그레이션 003, `/api/integrations`, `ingest/retry.mjs`
 
 확정된 선택(2026-11-02): 공통 컬럼은 기존 테이블에도 소급(쌓기 전용 제외), 재수신 행은 신규 배정에서 함께 담기 허용(화면에 "재수신" 표시), 마이그레이션은 SQL 파일 순서 적용, 원본 열람 기록은 불필요.
 
-그 다음 후보: 규칙 관리 API(rules 수정·재판정), 썸네일 생성. 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 design.md 6장.
+그 다음 후보: 규칙 관리 API(rules 수정·재판정), 실제 모델 어댑터. 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 design.md 6장.
 
 새 세션 시작: `README.md 읽고 이어서 해줘` 한 줄이면 된다 (CLAUDE.md가 README → design.md 순서로 읽도록 안내함).
 
@@ -73,7 +73,7 @@ cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api는 API
 
 ## 테스트
 ```
-cd backend && npm test      # 백엔드 테스트 103개 (API 통합, 파일 API, 사본 생성, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
+cd backend && npm test      # 백엔드 테스트 117개 (API 통합, 파일 API, 연계 관리, 사본 생성, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
 cd frontend && npm test     # 단위 테스트 (영문 코드↔한글 매핑 등)
 cd frontend && npx tsc -b   # 타입 체크
 ```

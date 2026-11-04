@@ -51,12 +51,13 @@ export const MENU: TopMenu[] = [
     label: '설정',
     groups: [
       { label: '판정', items: [{ label: '임계값/규칙', path: '/settings/rules' }] },
+      { label: '연계', items: [{ label: '연계 관리', path: '/settings/integrations' }] },
       { label: '사용자', items: [{ label: '사용자 관리', path: '/settings/users' }] },
     ],
   },
 ]
 
-export const IMPLEMENTED = new Set(['/review/assignments', '/monitoring/time'])
+export const IMPLEMENTED = new Set(['/review/assignments', '/monitoring/time', '/settings/integrations'])
 
 export function topKeyOfPath(pathname: string) {
   return MENU.find((m) => pathname.startsWith(`/${m.key}`))?.key ?? MENU[0].key

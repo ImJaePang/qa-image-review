@@ -8,6 +8,7 @@ import assignmentRoutes from './routes/assignments.mjs'
 import imageRoutes from './routes/images.mjs'
 import fileRoutes from './routes/files.mjs'
 import monitoringRoutes from './routes/monitoring.mjs'
+import integrationRoutes from './routes/integrations.mjs'
 
 export async function buildApp(opts = {}) {
   const app = Fastify({ logger: opts.logger ?? false })
@@ -47,6 +48,7 @@ export async function buildApp(opts = {}) {
   await app.register(assignmentRoutes, { prefix: '/api' })
   await app.register(imageRoutes, { prefix: '/api' })
   await app.register(monitoringRoutes, { prefix: '/api' })
+  await app.register(integrationRoutes, { prefix: '/api' })
   await app.register(fileRoutes, { prefix: '/api' })
 
   app.addHook('onClose', async () => {
