@@ -31,7 +31,8 @@ export function AppLayout() {
           ) : (
             <div className="flex h-full min-h-80 flex-col items-center justify-center gap-3 text-muted-foreground">
               <ShieldAlert className="size-10" />
-              <p className="text-lg font-medium text-foreground">이 화면을 쓸 권한이 없습니다</p>
+              <p className="text-lg font-medium text-foreground">접근할 수 없는 페이지입니다</p>
+              <p className="text-sm">권한이 없거나 존재하지 않는 화면입니다.</p>
               {leaves[0] ? (
                 <Link to={leaves[0].path} className="text-sm text-primary hover:underline">
                   {leaves[0].label}(으)로 이동

@@ -46,7 +46,9 @@ npm run dev
 14. [x] 사용자 관리 3단계 API: 권한(roles)·권한 코드(permissions)·메뉴(menus)·권한별 부여(role_permissions)를 DB로. 서버의 모든 권한 검사가 `isAdmin()` 대신 권한 코드(`can()`, `requirePermission`)로 바뀜. `/api/menus/mine`, `/api/admin/permissions`(조회·`PUT /admin/roles/:code/permissions`·이력), `/auth/me`에 권한 코드. 마이그레이션 007 
 15. [x] 사용자 관리 3단계 화면: 설정 > 사용자 > 권한별 메뉴(권한 × 메뉴·기능 체크 표, 변경 요약·저장·되돌리기·이력). 화면 메뉴를 `/api/menus/mine`에서 받아 그리고, 화면의 `role === 'admin'` 비교를 권한 코드(`useCan`)로 교체, 권한 없는 경로는 '권한 없음' 안내
 
-그 다음: 권한 종류를 완전히 DB 기반으로(아직 `ROLES`·`ROLE_LABEL` 고정 목록이 남아 있음) + 권한별 메뉴 표의 권한 다중 선택 필터, 연구원 업로드 — 설계 9장. 실제 모델 어댑터 검토(Anomalib 후보, 라이선스 확인 먼저). 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 design.md 6장.
+16. [x] 권한 종류 DB 전환: 고정 목록(`ROLES`·`ROLE_LABEL`) 제거, `GET /roles`·`/auth/signup-roles`, `roles.signup_selectable`(마이그레이션 008), 권한별 메뉴 표에 권한 다중 선택 필터·가로 스크롤(첫 열 고정), 접근 불가 안내
+
+그 다음: 권한 추가·이름 변경 화면은 논의 후 결정(설계 9장), 연구원 업로드 — 설계 9장. 실제 모델 어댑터 검토(Anomalib 후보, 라이선스 확인 먼저). 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 design.md 6장.
 
 새 세션 시작: `README.md 읽고 이어서 해줘` 한 줄이면 된다 (CLAUDE.md가 README → design.md 순서로 읽도록 안내함).
 
@@ -83,7 +85,7 @@ cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api는 API
 ## 테스트
 ```
 cd backend && npm test      # 백엔드 테스트 171개 (API 통합, 파일 API, 연계 관리, 규칙 관리, 사본 생성, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
-cd frontend && npm test     # 단위 테스트 32개 (영문 코드↔한글 매핑, 페이징, 사용자 관리 문구 등)
+cd frontend && npm test     # 단위 테스트 33개 (영문 코드↔한글 매핑, 페이징, 사용자 관리 문구 등)
 cd frontend && npx tsc -b   # 타입 체크
 ```
 개발 DB(`qa_review`)는 테스트가 건드리지 않는다. 화면(브라우저) 자동 테스트는 아직 없다.

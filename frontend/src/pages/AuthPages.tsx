@@ -7,8 +7,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Logo } from '@/components/layout/TopBar'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth, useCurrentUser } from '@/stores/auth'
-import { ROLE_LABEL, type SignupRole } from '@/lib/types'
+import type { SignupRole } from '@/lib/types'
 import { PROFILE_LABEL, type ProfileKey } from '@/lib/users'
 import { ApiError } from '@/api/client'
 import { api } from '@/api'
@@ -117,7 +118,9 @@ export function LoginPage() {
 export function SignupPage() {
   const signup = useAuth((s) => s.signup)
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' })
-  const [requestedRole, setRequestedRole] = useState<SignupRole>('qa')
+  const { data: signupRoles = [] } = useQuery({ queryKey: ['signup-roles'], queryFn: api.signupRoles })
+  const [picked, setRequestedRole] = useState<SignupRole | null>(null)
+  const requestedRole = picked ?? signupRoles.find((r) => r.code === 'qa')?.code ?? signupRoles[0]?.code ?? ''
   const [profile, setProfile] = useState<Record<ProfileKey, string>>({ company: '', department: '', jobTitle: '', phone: '', companyAddress: '' })
   const [done, setDone] = useState('')
   const [error, setError] = useState('')
@@ -182,10 +185,10 @@ export function SignupPage() {
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">신청 권한</legend>
           <div className="flex gap-4 text-sm">
-            {(['qa', 'researcher'] as const).map((r) => (
-              <label key={r} className="flex items-center gap-1.5">
-                <input type="radio" name="requestedRole" checked={requestedRole === r} onChange={() => setRequestedRole(r)} />
-                {ROLE_LABEL[r]}
+            {signupRoles.map((r) => (
+              <label key={r.code} className="flex items-center gap-1.5">
+                <input type="radio" name="requestedRole" checked={requestedRole === r.code} onChange={() => setRequestedRole(r.code)} />
+                {r.label}
               </label>
             ))}
           </div>

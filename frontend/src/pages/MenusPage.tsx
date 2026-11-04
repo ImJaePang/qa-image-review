@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Lock } from 'lucide-react'
+import { ChevronDown, Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { api, type PermissionTable } from '@/api'
 import { fmtDateTime } from '@/lib/domain'
-import { diffGrants, summarizeChanges, type Grants } from '@/lib/permissions'
+import { diffGrants, summarizeChanges, visibleRoles, type Grants } from '@/lib/permissions'
 import { useAuth, useCan } from '@/stores/auth'
 
 const toSets = (granted: PermissionTable['granted']): Grants => Object.fromEntries(Object.entries(granted).map(([r, c]) => [r, new Set(c)]))
@@ -18,6 +19,7 @@ export function MenusPage() {
   const { data: table, isLoading, isError, error } = useQuery({ queryKey: ['permissions'], queryFn: api.getPermissions, enabled: allowed })
   const { data: history = [] } = useQuery({ queryKey: ['permissions', 'history'], queryFn: api.permissionHistory, enabled: allowed })
   const [draft, setDraft] = useState<Grants>({})
+  const [picked, setPicked] = useState<Set<string>>(new Set()) // 열 필터: 아무것도 안 고르면 전체 권한
   useEffect(() => {
     if (table) setDraft(toSets(table.granted))
   }, [table])
@@ -31,6 +33,7 @@ export function MenusPage() {
   }, [table])
   const roleLabels = useMemo(() => Object.fromEntries((table?.roles ?? []).map((r) => [r.code, r.label])), [table])
   const changes = table ? diffGrants(original, draft) : []
+  const shown = visibleRoles(table?.roles ?? [], picked) // 필터는 보이는 열만 바꾼다 (숨겨진 열의 변경도 저장 대상에 남는다)
 
   const save = useMutation({
     mutationFn: async () => {
@@ -82,9 +85,9 @@ export function MenusPage() {
   const head = (first: string) => (
     <TableHeader>
       <TableRow>
-        <TableHead>{first}</TableHead>
-        {table.roles.map((r) => (
-          <TableHead key={r.code} className="w-28 text-center">
+        <TableHead className="sticky left-0 z-10 min-w-64 bg-card">{first}</TableHead>
+        {shown.map((r) => (
+          <TableHead key={r.code} className="w-28 min-w-28 text-center">
             {r.label}
           </TableHead>
         ))}
@@ -107,22 +110,57 @@ export function MenusPage() {
         <p className="text-sm text-muted-foreground">권한마다 쓸 수 있는 메뉴와 기능을 정합니다. 여기서 정한 내용은 화면 메뉴뿐 아니라 서버(API) 검사에도 똑같이 적용됩니다.</p>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3 text-sm">
+        <span className="text-muted-foreground">표시할 권한</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+            {picked.size === 0 ? `전체 (${table.roles.length})` : `${picked.size}개 선택`}
+            <ChevronDown className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-44">
+            {table.roles.map((r) => (
+              <DropdownMenuCheckboxItem
+                key={r.code}
+                checked={picked.has(r.code)}
+                closeOnClick={false}
+                onCheckedChange={(v) =>
+                  setPicked((s) => {
+                    const n = new Set(s)
+                    if (v) n.add(r.code)
+                    else n.delete(r.code)
+                    return n
+                  })
+                }
+              >
+                {r.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {picked.size > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>
+            전체 보기
+          </Button>
+        )}
+        <span className="text-xs text-muted-foreground">권한이 많을 때 필요한 열만 골라 봅니다. 숨긴 열의 변경 내용도 저장에 포함됩니다.</span>
+      </div>
+
       <section className="space-y-2">
         <h2 className="text-sm font-semibold">
           메뉴 접근 <span className="font-normal text-muted-foreground">체크하면 그 권한의 사용자에게 메뉴가 보이고 해당 기능을 쓸 수 있습니다</span>
         </h2>
-        <div className="rounded-lg border bg-card">
-          <Table>
+        <div className="overflow-x-auto rounded-lg border bg-card">
+          <Table className="min-w-max">
             {head('메뉴')}
             <TableBody>
               {groups.map((g) => (
-                <GroupRows key={g.top} title={g.top} cols={table.roles.length + 1}>
+                <GroupRows key={g.top} title={g.top} cols={shown.length + 1}>
                   {g.items.map((m) => (
                     <TableRow key={m.path}>
-                      <TableCell className="pl-6">
+                      <TableCell className="sticky left-0 z-10 min-w-64 bg-card pl-6">
                         {m.label} <span className="ml-1 text-xs text-muted-foreground">{m.groupLabel}</span>
                       </TableCell>
-                      {table.roles.map((r) => cell(r.code, m.permission))}
+                      {shown.map((r) => cell(r.code, m.permission))}
                     </TableRow>
                   ))}
                 </GroupRows>
@@ -136,17 +174,17 @@ export function MenusPage() {
         <h2 className="text-sm font-semibold">
           기능 권한 <span className="font-normal text-muted-foreground">메뉴와 별개로 허용할 동작</span>
         </h2>
-        <div className="rounded-lg border bg-card">
-          <Table>
+        <div className="overflow-x-auto rounded-lg border bg-card">
+          <Table className="min-w-max">
             {head('기능')}
             <TableBody>
               {table.functions.map((f) => (
                 <TableRow key={f.code}>
-                  <TableCell>
+                  <TableCell className="sticky left-0 z-10 min-w-64 bg-card">
                     {f.label}
                     {f.description && <p className="text-xs text-muted-foreground">{f.description}</p>}
                   </TableCell>
-                  {table.roles.map((r) => cell(r.code, f.code))}
+                  {shown.map((r) => cell(r.code, f.code))}
                 </TableRow>
               ))}
             </TableBody>

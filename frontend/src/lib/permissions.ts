@@ -26,3 +26,8 @@ export function summarizeChanges(changes: GrantChange[], roleLabels: Record<stri
   const rest = changes.length - max
   return lines.join(' · ') + (rest > 0 ? ` 외 ${rest}건` : '')
 }
+
+/** 필터로 고른 권한(code 집합)만 남긴다. 아무것도 안 골랐으면 전부 */
+export function visibleRoles<T extends { code: string }>(roles: T[], selected: Set<string>): T[] {
+  return selected.size === 0 ? roles : roles.filter((r) => selected.has(r.code))
+}

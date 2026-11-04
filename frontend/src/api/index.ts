@@ -147,6 +147,13 @@ export interface RejudgeResult {
   changed: number
 }
 
+export interface RoleInfo {
+  code: string
+  label: string
+  system: boolean
+  signupSelectable: boolean
+}
+
 // ── 권한별 메뉴 (관리자) ──
 export interface PermissionTable {
   roles: { code: string; label: string; system: boolean }[]
@@ -220,6 +227,9 @@ export const api = {
   /** 만료된 사용자가 로그인 없이 해제를 요청한다 (본인 확인용으로 이메일·비밀번호를 다시 보낸다) */
   requestExpiryRelease: (email: string, password: string) => post<{ ok: true; message: string }>('/auth/expiry-release-request', { email, password }),
   logout: () => post<{ ok: true }>('/auth/logout'),
+  /** 가입 화면용(로그인 전): 신청할 수 있는 권한 */
+  signupRoles: () => get<{ roles: { code: string; label: string }[] }>('/auth/signup-roles').then((r) => r.roles),
+  listRoles: () => get<{ roles: RoleInfo[] }>('/roles').then((r) => r.roles),
   myMenus: () => get<{ menus: TopMenu[] }>('/menus/mine').then((r) => r.menus),
   getPermissions: () => get<PermissionTable>('/admin/permissions'),
   saveRolePermissions: (role: string, permissions: string[]) => put<{ role: string; granted: string[]; revoked: string[] }>(`/admin/roles/${role}/permissions`, { permissions }),

@@ -9,15 +9,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/api'
 import { fmtDate, fmtDateTime } from '@/lib/domain'
-import { ROLE_LABEL, type Role } from '@/lib/types'
+import { useRoles } from '@/hooks/useRoles'
+import type { Role } from '@/lib/types'
 import { BULK_LABEL, PROFILE_LABEL, USER_STATUS_LABEL, describeUserHistory, type BulkAction, type ProfileKey, type UserProfile } from '@/lib/users'
 
-const ROLES: Role[] = ['admin', 'researcher', 'qa']
-const roleItems = ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] }))
-const roleLabel = (r: string) => ROLE_LABEL[r as Role] ?? r
 const PROFILE_KEYS = Object.keys(PROFILE_LABEL) as ProfileKey[]
 
 export function RoleSelect({ value, onChange, disabled, className }: { value: Role; onChange: (r: Role) => void; disabled?: boolean; className?: string }) {
+  const { roles } = useRoles()
+  const roleItems = roles.map((r) => ({ value: r.code, label: r.label }))
   return (
     <Select items={roleItems} value={value} onValueChange={(v) => v && onChange(v as Role)} disabled={disabled}>
       <SelectTrigger className={className ?? 'w-40'} aria-label="권한">
@@ -37,6 +37,7 @@ export function RoleSelect({ value, onChange, disabled, className }: { value: Ro
 /** 사용자 수정: 권한·사용기한·소속·연락처, 상태에 맞는 처리(승인/반려/비활성/재활성/만료 해제), 임시 비밀번호, 변경 이력 */
 export function UserEditDialog({ userId, onClose }: { userId: string | null; onClose: () => void }) {
   const qc = useQueryClient()
+  const { roleLabel } = useRoles()
   const { data: user } = useQuery({ queryKey: ['admin-users', 'one', userId], queryFn: () => api.getAdminUser(userId!), enabled: !!userId })
   const [name, setName] = useState('')
   const [role, setRole] = useState<Role>('qa')

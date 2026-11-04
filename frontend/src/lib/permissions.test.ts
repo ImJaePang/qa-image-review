@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { diffGrants, summarizeChanges, type Grants } from './permissions'
+import { diffGrants, summarizeChanges, visibleRoles, type Grants } from './permissions'
 
 const g = (o: Record<string, string[]>): Grants => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, new Set(v)]))
 
@@ -21,5 +21,13 @@ describe('권한 표 변경 비교', () => {
     const ch = diffGrants(g({ qa: [], researcher: ['a'] }), g({ qa: ['b', 'c', 'd'], researcher: [] }))
     expect(summarizeChanges(ch, roles, codes, 3)).toBe('QA: 규칙 허용 · QA: 연계 허용 · QA: 사용자 허용 외 1건')
     expect(summarizeChanges([], roles, codes)).toBe('')
+  })
+})
+
+describe('권한 열 필터', () => {
+  const roles = [{ code: 'admin' }, { code: 'researcher' }, { code: 'qa' }]
+  test('아무것도 안 고르면 전부, 고르면 그 권한만 (원래 순서 유지)', () => {
+    expect(visibleRoles(roles, new Set())).toHaveLength(3)
+    expect(visibleRoles(roles, new Set(['qa', 'admin'])).map((r) => r.code)).toEqual(['admin', 'qa'])
   })
 })

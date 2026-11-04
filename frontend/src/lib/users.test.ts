@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest'
 import { BULK_CHUNK, bulkActionsFor, chunk, describeUserHistory, mergeBulkResults, summarizeBulk } from './users'
-import { ROLE_LABEL } from './types'
 
-const role = (r: string) => ROLE_LABEL[r as keyof typeof ROLE_LABEL] ?? r
+const LABELS: Record<string, string> = { admin: '관리자', researcher: '연구원', qa: 'QA' }
+const role = (r: string) => LABELS[r] ?? r
 
 describe('상태 필터별 일괄 처리 동작', () => {
   test('승인 대기는 승인/반려, 만료는 해제/비활성, 전체 보기는 없음', () => {

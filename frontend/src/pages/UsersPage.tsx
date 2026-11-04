@@ -12,7 +12,8 @@ import { UserEditDialog } from '@/components/user/UserEditDialog'
 import { api, type AdminUser } from '@/api'
 import { fmtDate, fmtDateTime } from '@/lib/domain'
 import { DEFAULT_PAGE_SIZE } from '@/lib/paging'
-import { ROLE_LABEL, type Role } from '@/lib/types'
+import { useRoles } from '@/hooks/useRoles'
+import type { Role } from '@/lib/types'
 import {
   BULK_CHUNK,
   BULK_LABEL,
@@ -30,20 +31,19 @@ import { useCan } from '@/stores/auth'
 
 type StatusFilter = UserStatus | 'ALL'
 const ALL = 'ALL'
-const roleOptions = [{ value: ALL, label: '전체 권한' }, ...(['admin', 'researcher', 'qa'] as Role[]).map((r) => ({ value: r, label: ROLE_LABEL[r] }))]
 
 const statusTone = (s: UserStatus) => (s === 'ACTIVE' ? 'default' : 'secondary')
 const dash = (v: string | null | undefined, f: (s: string) => string = (s) => s) => (v ? f(v) : '-')
 
 /** 상태 필터에 따라 보여 줄 열 (승인 대기 → 신청 정보, 만료 → 만료일·해제 요청 …) */
-function extraColumns(status: StatusFilter): { head: string; cell: (u: AdminUser) => React.ReactNode }[] {
-  const role = { head: '권한', cell: (u: AdminUser) => ROLE_LABEL[u.role] }
+function extraColumns(status: StatusFilter, roleLabel: (c: string | null) => string): { head: string; cell: (u: AdminUser) => React.ReactNode }[] {
+  const role = { head: '권한', cell: (u: AdminUser) => roleLabel(u.role) }
   const expires = { head: status === 'EXPIRED' ? '만료일' : '사용기한', cell: (u: AdminUser) => dash(u.expiresAt, fmtDate) }
   const lastLogin = { head: '마지막 로그인', cell: (u: AdminUser) => dash(u.lastLoginAt, fmtDateTime) }
   switch (status) {
     case 'PENDING':
       return [
-        { head: '신청 권한', cell: (u) => (u.requestedRole ? ROLE_LABEL[u.requestedRole] : '-') },
+        { head: '신청 권한', cell: (u) => roleLabel(u.requestedRole) },
         { head: '신청일', cell: (u) => fmtDateTime(u.createdAt) },
       ]
     case 'EXPIRED':
@@ -59,6 +59,8 @@ function extraColumns(status: StatusFilter): { head: string; cell: (u: AdminUser
 
 export function UsersPage() {
   const qc = useQueryClient()
+  const { roles, roleLabel } = useRoles()
+  const roleOptions = [{ value: ALL, label: '전체 권한' }, ...roles.map((r) => ({ value: r.code, label: r.label }))]
   const isAdmin = useCan('user.manage')
   const [status, setStatus] = useState<StatusFilter>(ALL)
   const [role, setRole] = useState<string>(ALL)
@@ -92,7 +94,7 @@ export function UsersPage() {
   const counts = data?.statusCounts
   const allCount = counts ? USER_STATUSES.reduce((n, s) => n + counts[s], 0) : 0
   const actions = bulkActionsFor(status)
-  const cols = extraColumns(status)
+  const cols = extraColumns(status, roleLabel)
 
   const pageAllSelected = rows.length > 0 && rows.every((u) => selected.has(u.id))
   const togglePage = () => {
@@ -150,7 +152,7 @@ export function UsersPage() {
 
   const start = (action: BulkAction, withRole?: Role) => {
     const n = selected.size
-    const what = withRole ? `${n}명을 ${ROLE_LABEL[withRole]} 권한으로 ${BULK_LABEL[action]}` : `${n}명 ${BULK_LABEL[action]}`
+    const what = withRole ? `${n}명을 ${roleLabel(withRole)} 권한으로 ${BULK_LABEL[action]}` : `${n}명 ${BULK_LABEL[action]}`
     if (['REJECT', 'DISABLE'].includes(action) || n > BULK_CHUNK || withRole) if (!confirm(`${what}할까요?`)) return
     run.mutate({ action, withRole })
   }
