@@ -29,7 +29,7 @@ export default async function permissionRoutes(app) {
     // 표 전체: 권한 목록, 권한 코드(메뉴/기능), 권한별 부여 현황, 잠긴 항목
     admin.get('/admin/permissions', async () => {
       const [roles, perms, menus, grants] = await Promise.all([
-        pool.query('SELECT code, label, is_system FROM roles ORDER BY sort_order, code'),
+        pool.query('SELECT code, label, is_system, description FROM roles ORDER BY sort_order, code'),
         pool.query('SELECT code, kind, label, description FROM permissions ORDER BY sort_order, code'),
         pool.query('SELECT path, top_label, group_label, label, permission_code FROM menus ORDER BY sort_order, path'),
         pool.query('SELECT role_code, permission_code FROM role_permissions'),
@@ -37,7 +37,7 @@ export default async function permissionRoutes(app) {
       const granted = Object.fromEntries(roles.rows.map((r) => [r.code, []]))
       for (const g of grants.rows) granted[g.role_code]?.push(g.permission_code)
       return {
-        roles: roles.rows.map((r) => ({ code: r.code, label: r.label, system: r.is_system })),
+        roles: roles.rows.map((r) => ({ code: r.code, label: r.label, system: r.is_system, description: r.description })),
         menus: menus.rows.map((m) => ({ path: m.path, topLabel: m.top_label, groupLabel: m.group_label, label: m.label, permission: m.permission_code })),
         functions: perms.rows.filter((p) => p.kind === 'FUNCTION').map((p) => ({ code: p.code, label: p.label, description: p.description })),
         granted,
