@@ -57,7 +57,7 @@ export const MENU: TopMenu[] = [
   },
 ]
 
-export const IMPLEMENTED = new Set(['/review/assignments', '/monitoring/time', '/settings/integrations'])
+export const IMPLEMENTED = new Set(['/review/assignments', '/monitoring/time', '/settings/integrations', '/settings/rules'])
 
 export function topKeyOfPath(pathname: string) {
   return MENU.find((m) => pathname.startsWith(`/${m.key}`))?.key ?? MENU[0].key

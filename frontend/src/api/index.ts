@@ -103,6 +103,48 @@ export interface RetryResult {
   skipped: { imageKey: string; reason: string }[]
 }
 
+// ── 판정 규칙 (관리자) ──
+export interface Rule {
+  id: string
+  name: string
+  version: number
+  params: { normalMin: number; suspectMin: number }
+  enabled: boolean
+  /** 켜진 것 중 가장 높은 버전 = 지금 판정에 쓰는 규칙 */
+  active: boolean
+  createdAt: string
+  createdBy: string
+  verdictCount: number
+}
+export interface RuleList {
+  name: string
+  activeId: string | null
+  items: Rule[]
+  /** 활성 규칙이 아닌 규칙으로 판정되어 있어 재판정이 필요한 이미지 수 */
+  stale: { unassigned: number; assigned: number }
+}
+export type VerdictCounts = { NORMAL: number; SUSPECT: number; DEFECT: number }
+export interface RulePreview {
+  total: number
+  current: VerdictCounts
+  proposed: VerdictCounts
+  changed: { unassigned: number; assigned: number }
+}
+export interface RuleHistoryItem {
+  id: string
+  action: 'CREATE' | 'ENABLE' | 'DISABLE' | 'REJUDGE'
+  version: number
+  detail: Record<string, any>
+  at: string
+  actor: string
+}
+export interface RejudgeResult {
+  ruleVersion: number
+  scope: 'unassigned' | 'all'
+  rejudged: number
+  changed: number
+}
+
 export type ImageFilter = 'all' | 'unreviewed' | 'approved' | 'rejected'
 
 export interface Page<T> {
@@ -171,6 +213,14 @@ export const api = {
   integrationHistory: (id: string) => get<{ items: IntegrationHistoryItem[] }>(`/integrations/${id}/history`).then((r) => r.items),
   integrationFailed: (id: string) => get<{ items: FailedImage[] }>(`/integrations/${id}/failed`).then((r) => r.items),
   retryIntegration: (id: string) => post<RetryResult>(`/integrations/${id}/retry`),
+
+  // ── 판정 규칙 (관리자) ──
+  listRules: () => get<RuleList>('/rules'),
+  previewRule: (p: { normalMin: number; suspectMin: number }) => get<RulePreview>(`/rules/preview?normalMin=${p.normalMin}&suspectMin=${p.suspectMin}`),
+  createRule: (p: { normalMin: number; suspectMin: number }) => post<Rule>('/rules', p),
+  setRuleEnabled: (id: string, enabled: boolean) => patch<Rule>(`/rules/${id}`, { enabled }),
+  rejudge: (id: string, scope: 'unassigned' | 'all') => post<RejudgeResult>(`/rules/${id}/rejudge`, { scope }),
+  ruleHistory: () => get<{ items: RuleHistoryItem[] }>('/rules/history').then((r) => r.items),
 
   reviewImage: (id: string, imageId: string, status: '승인' | '반려', comment: string) =>
     put<{ progress: { reviewed: number; approved: number; rejected: number } }>(
