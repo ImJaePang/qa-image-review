@@ -52,7 +52,9 @@ npm run dev
 
 18. [x] 사유 코드 `UNKNOWN`(원인 미분류) 추가(마이그레이션 010). 실제 모델 어댑터(PatchCore, Anomalib): `MODEL_ADAPTER=patchcore`, Python 추론 서버 `python/serve.py` + 학습 `python/train.py`(사용법 `python/README.md`), 점수 0~1 변환·이상 맵 → 원본 픽셀 박스·투명 히트맵 PNG
 
-그 다음: 신규 배정 담당자 후보를 권한 코드 기준으로, 연구원 업로드 — 설계 9장. 실제 모델 어댑터 검토(Anomalib 후보, 라이선스 확인 먼저). 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 design.md 6장.
+19. [x] 신규 배정 담당자 후보를 기능 권한 `assignment.receive`(배정받기)로: `GET /api/assignees`, 배정 생성 시 서버 검증(마이그레이션 011), 권한별 메뉴 표에서 켜고 끔
+
+그 다음: 연구원 업로드 — 설계 9장. 실제 모델 어댑터 검토(Anomalib 후보, 라이선스 확인 먼저). 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 design.md 6장.
 
 새 세션 시작: `README.md 읽고 이어서 해줘` 한 줄이면 된다 (CLAUDE.md가 README → design.md 순서로 읽도록 안내함).
 
