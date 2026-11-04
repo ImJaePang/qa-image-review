@@ -4,7 +4,7 @@
 import { httpError } from './errors.mjs'
 
 /** 관리자가 권한을 모두 잃어 아무도 설정을 못 바꾸게 되는 일을 막기 위해, 관리자 권한에서 빼지 못하는 코드 */
-export const LOCKED_ADMIN_PERMISSIONS = ['user.manage', 'menu.manage']
+export const LOCKED_ADMIN_PERMISSIONS = ['user.manage', 'role.manage', 'menu.manage']
 
 export async function loadPermissions(db, roleCode) {
   const { rows } = await db.query('SELECT permission_code FROM role_permissions WHERE role_code = $1', [roleCode])

@@ -3,11 +3,13 @@
 // 가입한 직후 실제 권한은 승인 전까지 쓸 수 없는 상태로 두고, 신청이 없을 때의 기본 신청 권한이다.
 export const DEFAULT_ROLE = 'qa'
 
-/** 권한 코드가 roles에 있는지 확인한다. signupOnly면 가입 때 신청할 수 있는 권한(signup_selectable)만 허용. 아니면 400 */
-export async function assertRole(db, code, { signupOnly = false } = {}) {
-  const { rows } = await db.query('SELECT signup_selectable FROM roles WHERE code = $1', [code])
-  if (!rows.length || (signupOnly && !rows[0].signup_selectable)) {
-    const err = new Error(signupOnly ? '신청할 수 없는 권한입니다.' : '알 수 없는 권한입니다.')
+/** 권한 코드가 roles에 있는지 확인한다. signupOnly면 가입 때 신청할 수 있는 권한(signup_selectable)만 허용.
+ *  사용 안 함(is_active=false) 권한은 새로 부여할 수 없다 (requireActive:false면 존재만 확인). 아니면 400 */
+export async function assertRole(db, code, { signupOnly = false, requireActive = true } = {}) {
+  const { rows } = await db.query('SELECT signup_selectable, is_active FROM roles WHERE code = $1', [code])
+  const bad = !rows.length || (signupOnly && !rows[0].signup_selectable) || (requireActive && !rows[0].is_active)
+  if (bad) {
+    const err = new Error(rows.length ? '선택할 수 없는 권한입니다.' : '알 수 없는 권한입니다.')
     err.statusCode = 400
     throw err
   }

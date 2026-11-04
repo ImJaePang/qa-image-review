@@ -55,9 +55,9 @@ describe('표 조회와 저장', () => {
   test('표에는 권한 3종, 메뉴, 기능 권한, 잠긴 항목이 있다', async () => {
     const r = (await api('GET', '/api/admin/permissions', admin)).body
     assert.deepEqual(r.roles.map((x) => x.code), ['admin', 'researcher', 'qa'])
-    assert.equal(r.menus.length, 11)
+    assert.equal(r.menus.length, 12)
     assert.deepEqual(r.functions.map((f) => f.code), ['assignment.manage', 'image.view_all', 'image.upload'])
-    assert.deepEqual(r.locked.admin, ['user.manage', 'menu.manage'])
+    assert.deepEqual(r.locked.admin, ['user.manage', 'role.manage', 'menu.manage'])
   })
 
   test('저장하면 로그인 중인 사용자에게도 바로 적용된다 (메뉴 + API), 바뀐 것만 이력에 남는다', async () => {

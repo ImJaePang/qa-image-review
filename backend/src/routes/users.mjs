@@ -134,7 +134,7 @@ export default async function userAdminRoutes(app) {
     async (req) => {
       const { id } = req.params
       const b = req.body
-      if (b.role !== undefined) await assertRole(pool, b.role)
+      if (b.role !== undefined) await assertRole(pool, b.role, { requireActive: false })
       let newExpires
       if (b.expiresAt !== undefined) {
         newExpires = new Date(b.expiresAt)
@@ -151,6 +151,7 @@ export default async function userAdminRoutes(app) {
           await history(client, id, 'PROFILE', { name: { from: cur.name, to: b.name.trim() } }, actor)
         }
         if (b.role !== undefined && b.role !== cur.role) {
+          await assertRole(client, b.role) // 사용 안 함 권한으로는 바꿀 수 없다 (현재 권한 유지는 허용)
           if (cur.eff_status === 'PENDING') throw httpError(409, '승인 대기 중인 사용자의 권한은 승인할 때 정합니다.')
           await client.query('UPDATE users SET role = $2 WHERE id = $1', [id, b.role])
           await history(client, id, 'ROLE', { from: cur.role, to: b.role }, actor)

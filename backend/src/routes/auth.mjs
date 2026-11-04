@@ -126,14 +126,14 @@ export default async function authRoutes(app) {
 
   // 가입 화면용(로그인 전): 신청할 수 있는 권한 목록
   app.get('/auth/signup-roles', async () => {
-    const { rows } = await pool.query('SELECT code, label FROM roles WHERE signup_selectable ORDER BY sort_order, code')
+    const { rows } = await pool.query('SELECT code, label FROM roles WHERE signup_selectable AND is_active ORDER BY sort_order, code')
     return { roles: rows }
   })
 
   // 전체 권한 목록(로그인 후): 화면의 이름 표시·선택지에 쓴다
   app.get('/roles', { onRequest: app.authenticate }, async () => {
-    const { rows } = await pool.query('SELECT code, label, is_system, signup_selectable FROM roles ORDER BY sort_order, code')
-    return { roles: rows.map((r) => ({ code: r.code, label: r.label, system: r.is_system, signupSelectable: r.signup_selectable })) }
+    const { rows } = await pool.query('SELECT code, label, is_system, signup_selectable, is_active FROM roles ORDER BY sort_order, code')
+    return { roles: rows.map((r) => ({ code: r.code, label: r.label, system: r.is_system, signupSelectable: r.signup_selectable, active: r.is_active })) }
   })
 
   app.post('/auth/logout', async (req, reply) => {
