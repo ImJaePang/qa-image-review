@@ -10,6 +10,7 @@
     "make-derivatives": "node --env-file=../.env scripts/make-derivatives.mjs",
     "worker": "node --env-file=../.env src/worker.mjs",
     "migrate": "node --env-file=../.env scripts/migrate.mjs",
+    "rotate-secrets": "node scripts/rotate-secrets.mjs",
     "load-mock": "node --env-file=../.env scripts/load-results.mjs"
   },
   "dependencies": {
