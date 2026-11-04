@@ -1,0 +1,7 @@
+# torch / torchvision 은 CUDA 빌드를 별도 index-url 로 먼저 설치한다 (README 참고)
+anomalib==2.7.0
+lightning==2.6.6
+numpy==2.5.4
+pillow==13.0.0
+scipy==1.18.1
+timm==1.0.31
