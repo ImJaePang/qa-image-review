@@ -37,7 +37,9 @@ npm run dev
 
 확정된 선택(2026-11-02): 공통 컬럼은 기존 테이블에도 소급(쌓기 전용 제외), 재수신 행은 신규 배정에서 함께 담기 허용(화면에 "재수신" 표시), 마이그레이션은 SQL 파일 순서 적용, 원본 열람 기록은 불필요.
 
-그 다음 후보: 규칙 관리 API(rules 수정·재판정), 실제 모델 어댑터. 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 design.md 6장.
+10. [x] 규칙 관리 API (`/api/rules`: 새 버전 쌓기, 미리보기, 재판정, 되돌리기, 이력. 마이그레이션 004). **화면(설정 > 판정 > 임계값/규칙)은 아직 없다 — 목업을 먼저 보여주고 정한다**
+
+그 다음 후보: 규칙 관리 화면, 실제 모델 어댑터. 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 design.md 6장.
 
 새 세션 시작: `README.md 읽고 이어서 해줘` 한 줄이면 된다 (CLAUDE.md가 README → design.md 순서로 읽도록 안내함).
 
@@ -49,7 +51,7 @@ npm run dev
 - [x] JSON → DB 적재 스크립트: `cd backend && npm install && npm run load-mock` (3천 장 적재 검증, 재실행해도 중복 없음)
 - [x] 목 이미지/모델 결과 생성 스크립트: `node backend/scripts/generate-mock.mjs --count 3000` → `data/images/`(git 제외), `results.jsonl`은 5장 JSON 계약 + originalPath/durationMs
 - [x] 백엔드 API (Fastify): 인증, 배정 목록/상세/신규/상태 변경/점검 내용, 이미지 페이지 조회, 검수 저장, 파일 서빙 (`cd backend && npm run dev`, 포트 3000)
-- [ ] 규칙 관리 API(rules 테이블 수정·재판정), 썸네일 생성
+- [x] 규칙 관리 API(새 버전 쌓기·미리보기·재판정·되돌리기), 썸네일 생성 (화면은 아직)
 - [x] 프론트를 실제 API로 교체, 3천 장 대응 (서버 페이지네이션 + 가상 스크롤 + 낙관적 업데이트). 3천 장 배정 생성→사전배치→점검→검수 흐름을 브라우저로 확인 (`captures/2026-11-02_v0.2-api-connected`)
 - [x] 모니터링 페이지(소요 시간 분석): 담당자별 검수 속도, 배정별 소요, 모델 처리 시간, 수신 배치 기록 (`/monitoring/time`, 관리자 전용)
 - [x] 파일 수신 사전 검증 1단계: 마이그레이션 체계(`npm run migrate`), 수신 상태 컬럼, 연계/수신 배치 테이블, 모델 어댑터 계약 검증 + 목 어댑터
@@ -73,7 +75,7 @@ cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api는 API
 
 ## 테스트
 ```
-cd backend && npm test      # 백엔드 테스트 117개 (API 통합, 파일 API, 연계 관리, 사본 생성, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
+cd backend && npm test      # 백엔드 테스트 133개 (API 통합, 파일 API, 연계 관리, 규칙 관리, 사본 생성, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
 cd frontend && npm test     # 단위 테스트 (영문 코드↔한글 매핑 등)
 cd frontend && npx tsc -b   # 타입 체크
 ```

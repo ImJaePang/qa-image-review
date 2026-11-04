@@ -92,7 +92,7 @@ const idParams = { type: 'object', properties: { id: { type: 'integer', minimum:
 
 export default async function integrationRoutes(app) {
   app.addHook('onRequest', app.authenticate)
-  app.addHook('preHandler', async (req) => {
+  app.addHook('onRequest', async (req) => {
     if (!isAdmin(req.user)) throw httpError(403, '관리자만 사용할 수 있습니다.')
   })
 

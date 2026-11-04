@@ -26,6 +26,7 @@ describe('접근 제어', () => {
     assert.equal((await api('GET', '/api/integrations')).status, 401)
     assert.equal((await api('GET', '/api/integrations', qa1)).status, 403)
     assert.equal((await api('POST', '/api/integrations', qa1, { name: 'x' })).status, 403)
+    assert.equal((await api('POST', '/api/integrations', qa1, {})).status, 403) // 잘못된 본문이어도 권한이 먼저 (400이 아님)
     assert.equal((await api('PATCH', '/api/integrations/1', qa1, { enabled: false })).status, 403)
     assert.equal((await api('POST', '/api/integrations/1/retry', qa1)).status, 403)
     const r = await api('GET', '/api/integrations', admin)
