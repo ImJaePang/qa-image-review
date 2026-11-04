@@ -1,7 +1,7 @@
 # AI 생성 이미지 QA 검수 시스템
 
 AI가 생성한 이미지를 사전 검증한 뒤, QA 담당자가 화면에서 검수(승인/반려)하는 연습용 미니 프로젝트.
-기획 전문은 [docs/plan.md](docs/plan.md) 참고.
+기획 전문은 [docs/plan.md](docs/plan.md), **지금까지 구현된 것과 사용 방법은 [docs/guide.md](docs/guide.md)** 참고.
 
 ## 구조
 ```
