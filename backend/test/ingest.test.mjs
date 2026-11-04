@@ -506,3 +506,14 @@ test('processOne: 사본 생성이 실패해도 수신은 성공하고 경로는
   assert.equal(row.thumb_path, null)
   assert.equal(row.preview_path, null)
 })
+
+test('목 어댑터: PNG는 실제 픽셀 크기를 기록한다 (박스 좌표의 기준이므로 1920x1080 고정값이면 안 된다)', async () => {
+  const t = await setup()
+  t.drop('size.png', await png(800, 600))
+  await t.scan()
+  assert.equal((await t.process()).status, 'DONE')
+  const row = (await allImages())[0]
+  assert.deepEqual([row.width, row.height], [800, 600])
+  const boxes = (await pool.query('SELECT x, y, width, height FROM detections d JOIN model_runs m ON m.id = d.run_id WHERE m.image_id = $1', [row.id])).rows
+  for (const b of boxes) assert.ok(b.x + b.width <= 800 && b.y + b.height <= 600) // 박스가 이미지 안에 있다
+})

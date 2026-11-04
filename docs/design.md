@@ -297,3 +297,9 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 - 오류 생성: TEXTURE_ANOMALY·SHAPE_DISTORTION·PART_COUNT_MISMATCH = 마스크 인페인팅(ComfyUI), COMPOSITE_EDGE·LIGHTING_MISMATCH·SCALE_ANOMALY = sharp 합성. 박스 밖은 정상본과 동일.
 - **품질 평가(오류가 너무 티 나는지/미묘한지)는 아직 하지 않았다** — 사용자 판단 보류. 강도 조정은 스크립트의 `INPAINT_DENOISE`와 `compositeDefect`의 상수로 한다.
 - 다음: 이 PNG를 수신 폴더(inbox)에 넣어 워커가 실제로 처리하는지 확인(PNG 수신 경로, 사본 생성 시간 실측).
+
+### 실제 PNG 수신 검증 (2026-11-04)
+- 생성한 PNG 300장(1344×768)을 `ingest/inbox`에 넣고 워커(`npm run worker`)로 수신: 300장 모두 DONE·실패 0, 썸네일·미리보기 300/300 생성. 추론(목)+사본 생성 포함 20장/약 2초.
+- **발견한 버그**: 목 어댑터가 SVG 헤더만 읽고 PNG는 1920×1080으로 고정해 `images.width/height`가 실제(1344×768)와 달랐다. 박스 좌표는 원본 픽셀 기준이라 오버레이가 어긋나는 값이었다. 목 어댑터가 `sharp`로 실제 크기를 읽도록 수정하고, 800×600 PNG로 크기·박스 범위를 검증하는 테스트를 추가했다. 잘못 들어간 300장은 지우고 다시 수신했다.
+- 목 어댑터의 박스·점수는 파일 해시 기반의 가짜라 정답 박스(`ground_truth.jsonl`)와 무관하다. 정답과 비교하는 평가는 실제 모델 연동 때 한다.
+- 개발 DB에는 이 300장이 미배정 상태로 들어 있다(정상 213 / 의심 47 / 불량 40, 목 판정 기준).

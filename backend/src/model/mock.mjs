@@ -9,6 +9,7 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import sharp from 'sharp'
 import { REASON_CODES, assertValidResult } from './contract.mjs'
 
 const round2 = (v) => Math.round(v * 100) / 100
@@ -25,12 +26,16 @@ function rng(seed) {
   }
 }
 
-/** SVG 헤더의 width/height를 읽고, 없으면 1920x1080 (실제 어댑터는 이미지를 디코딩해 크기를 얻는다) */
-function sizeOf(buf) {
+/** SVG는 헤더의 width/height(없으면 1920x1080), 그 밖의 형식은 실제로 디코딩해 크기를 얻는다 (박스 좌표의 기준이 되는 원본 픽셀 크기) */
+async function sizeOf(buf) {
   const head = buf.subarray(0, 2048).toString('utf8')
-  const w = /<svg[^>]*\swidth="(\d+)"/.exec(head)?.[1]
-  const h = /<svg[^>]*\sheight="(\d+)"/.exec(head)?.[1]
-  return { width: w ? Number(w) : 1920, height: h ? Number(h) : 1080 }
+  if (head.includes('<svg')) {
+    const w = /<svg[^>]*\swidth="(\d+)"/.exec(head)?.[1]
+    const h = /<svg[^>]*\sheight="(\d+)"/.exec(head)?.[1]
+    return { width: w ? Number(w) : 1920, height: h ? Number(h) : 1080 }
+  }
+  const m = await sharp(buf).metadata() // 디코딩 불가면 예외 → 워커가 그 이미지를 FAILED로 기록
+  return { width: m.width, height: m.height }
 }
 
 function heatmapSvg(width, height, boxes) {
@@ -52,7 +57,7 @@ export function createMockAdapter({ modelVersion = 'mock-v1', defectRatio = 0.3 
       const buf = await readFile(filePath)
       const hash = createHash('sha256').update(buf).digest()
       const r = rng(hash.readUInt32BE(0))
-      const { width, height } = sizeOf(buf)
+      const { width, height } = await sizeOf(buf)
 
       const boxes = []
       let overall = 0.9 + r() * 0.09
