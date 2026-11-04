@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { api, type PermissionTable } from '@/api'
 import { fmtDateTime } from '@/lib/domain'
 import { diffGrants, summarizeChanges, visibleRoles, type Grants } from '@/lib/permissions'
@@ -88,7 +89,19 @@ export function MenusPage() {
         <TableHead className="sticky left-0 z-10 min-w-64 bg-card">{first}</TableHead>
         {shown.map((r) => (
           <TableHead key={r.code} className="w-28 min-w-28 text-center">
-            {r.label}
+            {r.description ? (
+              <Tooltip>
+                <TooltipTrigger className="cursor-help underline decoration-dotted underline-offset-4">{r.label}</TooltipTrigger>
+                <TooltipContent light side="bottom">
+                  <div>
+                    <b>{r.label}</b>
+                    <p className="mt-0.5 whitespace-pre-line">{r.description}</p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              r.label
+            )}
           </TableHead>
         ))}
       </TableRow>

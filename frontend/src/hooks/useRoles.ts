@@ -6,5 +6,7 @@ export function useRoles() {
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: api.listRoles, staleTime: 60_000 })
   /** 코드 → 이름 (아직 못 불러왔거나 모르는 코드면 코드 그대로) */
   const roleLabel = (code: string | null | undefined) => (code ? (roles.find((r) => r.code === code)?.label ?? code) : '-')
-  return { roles, roleLabel }
+  /** 새로 고를 수 있는 권한 (사용 안 함 제외) */
+  const activeRoles = roles.filter((r) => r.active)
+  return { roles, activeRoles, roleLabel }
 }

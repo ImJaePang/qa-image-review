@@ -59,8 +59,9 @@ function extraColumns(status: StatusFilter, roleLabel: (c: string | null) => str
 
 export function UsersPage() {
   const qc = useQueryClient()
-  const { roles, roleLabel } = useRoles()
+  const { roles, activeRoles, roleLabel } = useRoles()
   const roleOptions = [{ value: ALL, label: '전체 권한' }, ...roles.map((r) => ({ value: r.code, label: r.label }))]
+  const assignable = activeRoles.map((r) => ({ value: r.code, label: r.label })) // 승인할 때 지정할 수 있는 권한
   const isAdmin = useCan('user.manage')
   const [status, setStatus] = useState<StatusFilter>(ALL)
   const [role, setRole] = useState<string>(ALL)
@@ -234,7 +235,7 @@ export function UsersPage() {
                   신청 권한대로 일괄 승인
                 </Button>
                 <Select
-                  items={[{ value: '', label: '권한 지정 승인' }, ...roleOptions.slice(1)]}
+                  items={[{ value: '', label: '권한 지정 승인' }, ...assignable]}
                   value=""
                   onValueChange={(v) => v && start('APPROVE', v as Role)}
                   disabled={run.isPending}
@@ -243,7 +244,7 @@ export function UsersPage() {
                     <SelectValue placeholder="권한 지정 승인" />
                   </SelectTrigger>
                   <SelectContent>
-                    {roleOptions.slice(1).map((o) => (
+                    {assignable.map((o) => (
                       <SelectItem key={o.value} value={o.value}>
                         {o.label}로 승인
                       </SelectItem>

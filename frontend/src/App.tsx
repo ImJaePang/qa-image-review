@@ -9,6 +9,7 @@ import { AssignmentListPage } from '@/pages/AssignmentListPage'
 import { Placeholder } from '@/pages/Placeholder'
 import { PLACEHOLDER_PATHS } from '@/config/menu'
 import { MenusPage } from '@/pages/MenusPage'
+import { RolesPage } from '@/pages/RolesPage'
 import { TimeAnalysisPage } from '@/pages/TimeAnalysisPage'
 import { IntegrationsPage } from '@/pages/IntegrationsPage'
 import { UsersPage } from '@/pages/UsersPage'
@@ -35,6 +36,7 @@ export default function App() {
               <Route path="/settings/integrations" element={<IntegrationsPage />} />
               <Route path="/settings/rules" element={<RulesPage />} />
               <Route path="/settings/users" element={<UsersPage />} />
+              <Route path="/settings/roles" element={<RolesPage />} />
               <Route path="/settings/menus" element={<MenusPage />} />
               {PLACEHOLDER_PATHS.map((p) => (
                 <Route key={p} path={p} element={<Placeholder />} />

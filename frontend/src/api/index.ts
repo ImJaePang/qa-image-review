@@ -2,7 +2,7 @@
 import type { AssignmentListItem, AssignmentStatus, ImageItem, Role, SignupRole, User, Verdict } from '@/lib/types'
 import type { TopMenu } from '@/config/menu'
 import type { BulkAction, BulkResult, UserProfile, UserStatus } from '@/lib/users'
-import { get, patch, post, put } from './client'
+import { del, get, patch, post, put } from './client'
 import {
   REVIEW_CODE,
   STATUS_CODE,
@@ -152,11 +152,48 @@ export interface RoleInfo {
   label: string
   system: boolean
   signupSelectable: boolean
+  /** false = 사용 안 함: 새로 고르는 목록에서는 빠지고, 이미 가진 사용자의 이름 표시에는 계속 쓴다 */
+  active: boolean
+}
+
+// ── 권한 관리 (관리자) ──
+export interface AdminRole {
+  code: string
+  label: string
+  description: string | null
+  system: boolean
+  signupSelectable: boolean
+  active: boolean
+  sortOrder: number
+  userCount: number
+  createdAt: string
+  /** 사용자·변경 이력이 없어 진짜 삭제가 가능한가 */
+  deletable: boolean
+}
+export interface RoleHistoryItem {
+  id: string
+  action: 'CREATE' | 'UPDATE' | 'DEACTIVATE' | 'ACTIVATE' | 'DELETE'
+  detail: Record<string, any>
+  at: string
+  actor: string
+}
+export interface AdminRoleList {
+  items: AdminRole[]
+  total: number
+  page: number
+  pageSize: number
+  statusCounts: { ACTIVE: number; INACTIVE: number }
+}
+export interface RoleInput {
+  label?: string
+  description?: string | null
+  signupSelectable?: boolean
+  sortOrder?: number
 }
 
 // ── 권한별 메뉴 (관리자) ──
 export interface PermissionTable {
-  roles: { code: string; label: string; system: boolean }[]
+  roles: { code: string; label: string; system: boolean; description: string | null }[]
   menus: { path: string; topLabel: string; groupLabel: string; label: string; permission: string }[]
   functions: { code: string; label: string; description: string | null }[]
   /** 권한 코드(role) → 부여된 권한 코드 목록 */
@@ -300,6 +337,19 @@ export const api = {
   bulkUsers: (action: BulkAction, ids: string[], role?: Role) =>
     post<BulkResult & { action: BulkAction }>('/admin/users/bulk', { action, ids: ids.map(Number), ...(role ? { role } : {}) }),
   resetPassword: (id: string) => post<{ tempPassword: string }>(`/admin/users/${id}/reset-password`),
+
+  // ── 권한 관리 (관리자) ──
+  listAdminRoles: (p: { status?: 'ACTIVE' | 'INACTIVE'; q?: string; page: number; pageSize: number }) => {
+    const qs = new URLSearchParams({ page: String(p.page), pageSize: String(p.pageSize) })
+    if (p.status) qs.set('status', p.status)
+    if (p.q) qs.set('q', p.q)
+    return get<AdminRoleList>(`/admin/roles?${qs}`)
+  },
+  getAdminRole: (code: string) => get<{ role: AdminRole; history: RoleHistoryItem[] }>(`/admin/roles/${code}`),
+  createRole: (input: RoleInput & { code: string; label: string }) => post<{ role: AdminRole }>('/admin/roles', input),
+  updateRole: (code: string, input: RoleInput) => patch<{ role: AdminRole }>(`/admin/roles/${code}`, input),
+  setRoleActive: (code: string, active: boolean) => post<{ role: AdminRole }>(`/admin/roles/${code}/${active ? 'activate' : 'deactivate'}`),
+  deleteRole: (code: string) => del<{ deleted: string }>(`/admin/roles/${code}`),
 
   // ── 판정 규칙 (관리자) ──
   listRules: () => get<RuleList>('/rules'),

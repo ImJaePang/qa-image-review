@@ -17,7 +17,8 @@ const PROFILE_KEYS = Object.keys(PROFILE_LABEL) as ProfileKey[]
 
 export function RoleSelect({ value, onChange, disabled, className }: { value: Role; onChange: (r: Role) => void; disabled?: boolean; className?: string }) {
   const { roles } = useRoles()
-  const roleItems = roles.map((r) => ({ value: r.code, label: r.label }))
+  // 사용 안 함 권한은 고를 수 없지만, 지금 값이 그 권한이면 그대로 보이게 한다
+  const roleItems = roles.filter((r) => r.active || r.code === value).map((r) => ({ value: r.code, label: r.label }))
   return (
     <Select items={roleItems} value={value} onValueChange={(v) => v && onChange(v as Role)} disabled={disabled}>
       <SelectTrigger className={className ?? 'w-40'} aria-label="권한">
