@@ -26,7 +26,7 @@ import {
   type UserStatus,
 } from '@/lib/users'
 import { cn } from '@/lib/utils'
-import { useCurrentUser } from '@/stores/auth'
+import { useCan } from '@/stores/auth'
 
 type StatusFilter = UserStatus | 'ALL'
 const ALL = 'ALL'
@@ -58,9 +58,8 @@ function extraColumns(status: StatusFilter): { head: string; cell: (u: AdminUser
 }
 
 export function UsersPage() {
-  const me = useCurrentUser()
   const qc = useQueryClient()
-  const isAdmin = me?.role === 'admin'
+  const isAdmin = useCan('user.manage')
   const [status, setStatus] = useState<StatusFilter>(ALL)
   const [role, setRole] = useState<string>(ALL)
   const [q, setQ] = useState('')
@@ -156,7 +155,7 @@ export function UsersPage() {
     run.mutate({ action, withRole })
   }
 
-  if (!isAdmin) return <p className="text-sm text-muted-foreground">관리자만 사용할 수 있는 화면입니다.</p>
+  if (!isAdmin) return <p className="text-sm text-muted-foreground">이 화면을 쓸 권한이 없습니다.</p>
 
   const chip = (value: StatusFilter, label: string, n?: number) => (
     <button

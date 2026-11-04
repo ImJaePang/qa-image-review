@@ -1,3 +1,4 @@
+// 메뉴 구조는 서버(DB의 menus 테이블, 내 권한으로 볼 수 있는 것만)가 내려준다: GET /api/menus/mine.
 // 상단(상위) → 좌측(중메뉴 → 소메뉴) 구조. 소메뉴 하나가 우측 화면 하나(route)에 대응한다.
 export interface MenuLeaf {
   label: string
@@ -13,52 +14,12 @@ export interface TopMenu {
   groups: MenuGroup[]
 }
 
-export const MENU: TopMenu[] = [
-  {
-    key: 'home',
-    label: '홈',
-    groups: [{ label: '현황', items: [{ label: '대시보드', path: '/home/dashboard' }] }],
-  },
-  {
-    key: 'review',
-    label: '검수 관리',
-    groups: [
-      {
-        label: '배정',
-        items: [
-          { label: '배정 리스트', path: '/review/assignments' },
-          { label: '내 배정', path: '/review/my-assignments' },
-        ],
-      },
-      { label: '점검', items: [{ label: '점검 이력', path: '/review/history' }] },
-    ],
-  },
-  {
-    key: 'data',
-    label: '데이터',
-    groups: [
-      { label: '이미지', items: [{ label: '이미지 목록', path: '/data/images' }] },
-      { label: '모델', items: [{ label: '모델 실행 이력', path: '/data/model-runs' }] },
-    ],
-  },
-  {
-    key: 'monitoring',
-    label: '모니터링',
-    groups: [{ label: '분석', items: [{ label: '소요 시간 분석', path: '/monitoring/time' }] }],
-  },
-  {
-    key: 'settings',
-    label: '설정',
-    groups: [
-      { label: '판정', items: [{ label: '임계값/규칙', path: '/settings/rules' }] },
-      { label: '연계', items: [{ label: '연계 관리', path: '/settings/integrations' }] },
-      { label: '사용자', items: [{ label: '사용자 관리', path: '/settings/users' }] },
-    ],
-  },
-]
+/** 아직 화면을 만들지 않은 메뉴 경로 (DB에는 있고, 열면 준비 중 화면이 나온다) */
+export const PLACEHOLDER_PATHS = ['/home/dashboard', '/review/my-assignments', '/review/history', '/data/images', '/data/model-runs']
 
-export const IMPLEMENTED = new Set(['/review/assignments', '/monitoring/time', '/settings/integrations', '/settings/rules', '/settings/users'])
+export const allLeaves = (menus: TopMenu[]) => menus.flatMap((m) => m.groups.flatMap((g) => g.items))
 
-export function topKeyOfPath(pathname: string) {
-  return MENU.find((m) => pathname.startsWith(`/${m.key}`))?.key ?? MENU[0].key
+/** 경로가 속한 상단 메뉴 키. 없으면 첫 번째 */
+export function topKeyOfPath(menus: TopMenu[], pathname: string) {
+  return menus.find((m) => pathname.startsWith(`/${m.key}`))?.key ?? menus[0]?.key ?? ''
 }

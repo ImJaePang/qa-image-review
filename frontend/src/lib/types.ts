@@ -103,4 +103,6 @@ export interface User {
   name: string
   email: string
   role: Role
+  /** 서버의 권한 코드(role_permissions). 화면의 메뉴·버튼 표시용이며, 실제 차단은 서버가 같은 표로 한다 */
+  permissions: string[]
 }

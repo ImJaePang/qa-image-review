@@ -7,7 +7,8 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { LoginPage, SignupPage } from '@/pages/AuthPages'
 import { AssignmentListPage } from '@/pages/AssignmentListPage'
 import { Placeholder } from '@/pages/Placeholder'
-import { IMPLEMENTED, MENU } from '@/config/menu'
+import { PLACEHOLDER_PATHS } from '@/config/menu'
+import { MenusPage } from '@/pages/MenusPage'
 import { TimeAnalysisPage } from '@/pages/TimeAnalysisPage'
 import { IntegrationsPage } from '@/pages/IntegrationsPage'
 import { UsersPage } from '@/pages/UsersPage'
@@ -15,9 +16,6 @@ import { RulesPage } from '@/pages/RulesPage'
 import { useAuth } from '@/stores/auth'
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } })
-const placeholderPaths = MENU.flatMap((m) => m.groups.flatMap((g) => g.items.map((i) => i.path))).filter(
-  (p) => !IMPLEMENTED.has(p),
-)
 
 export default function App() {
   const init = useAuth((s) => s.init)
@@ -37,7 +35,8 @@ export default function App() {
               <Route path="/settings/integrations" element={<IntegrationsPage />} />
               <Route path="/settings/rules" element={<RulesPage />} />
               <Route path="/settings/users" element={<UsersPage />} />
-              {placeholderPaths.map((p) => (
+              <Route path="/settings/menus" element={<MenusPage />} />
+              {PLACEHOLDER_PATHS.map((p) => (
                 <Route key={p} path={p} element={<Placeholder />} />
               ))}
             </Route>

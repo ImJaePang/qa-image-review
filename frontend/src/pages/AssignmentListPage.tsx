@@ -14,12 +14,12 @@ import { api } from '@/api'
 import { fmtDate } from '@/lib/domain'
 import { DEFAULT_PAGE_SIZE } from '@/lib/paging'
 import { ASSIGNMENT_STATUSES, type AssignmentStatus } from '@/lib/types'
-import { useCurrentUser } from '@/stores/auth'
+import { useCan } from '@/stores/auth'
 
 const ALL = 'all'
 
 export function AssignmentListPage() {
-  const me = useCurrentUser()
+  const canManage = useCan('assignment.manage')
   const [params, setParams] = useSearchParams()
   const openId = params.get('id')
   const [newOpen, setNewOpen] = useState(false)
@@ -58,7 +58,7 @@ export function AssignmentListPage() {
           <h1 className="text-xl font-semibold">배정 리스트</h1>
           <p className="text-sm text-muted-foreground">QA 담당자에게 배정된 검수 건을 확인하고 점검합니다.</p>
         </div>
-        {me?.role === 'admin' && (
+        {canManage && (
           <Button onClick={() => setNewOpen(true)}>
             <Plus className="size-4" /> 신규 배정
           </Button>

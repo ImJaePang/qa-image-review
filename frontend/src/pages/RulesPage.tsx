@@ -9,7 +9,7 @@ import { api, type Rule, type VerdictCounts } from '@/api'
 import { fmtDateTime } from '@/lib/domain'
 import { VERDICT_OF, describeRuleHistory, fmtParams, parseThreshold, thresholdProblem } from '@/lib/rules'
 import { cn } from '@/lib/utils'
-import { useCurrentUser } from '@/stores/auth'
+import { useCan } from '@/stores/auth'
 
 function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
@@ -48,8 +48,7 @@ function Distribution({ current, proposed }: { current: VerdictCounts; proposed:
 }
 
 export function RulesPage() {
-  const me = useCurrentUser()
-  const isAdmin = me?.role === 'admin'
+  const isAdmin = useCan('rule.manage')
   const qc = useQueryClient()
 
   const { data, isLoading, isError, error } = useQuery({ queryKey: ['rules'], queryFn: api.listRules, enabled: isAdmin })
@@ -113,7 +112,7 @@ export function RulesPage() {
     onError,
   })
 
-  if (!isAdmin) return <p className="p-6 text-sm text-muted-foreground">관리자만 볼 수 있는 화면입니다.</p>
+  if (!isAdmin) return <p className="p-6 text-sm text-muted-foreground">이 화면을 쓸 권한이 없습니다.</p>
 
   const stale = data?.stale ?? { unassigned: 0, assigned: 0 }
   const staleInScope = scope === 'all' ? stale.unassigned + stale.assigned : stale.unassigned

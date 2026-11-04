@@ -1,5 +1,6 @@
 // 백엔드 API 호출. 화면 코드는 한글 값만 다루고, 변환은 mappers에서 한다.
 import type { AssignmentListItem, AssignmentStatus, ImageItem, Role, SignupRole, User, Verdict } from '@/lib/types'
+import type { TopMenu } from '@/config/menu'
 import type { BulkAction, BulkResult, UserProfile, UserStatus } from '@/lib/users'
 import { get, patch, post, put } from './client'
 import {
@@ -146,6 +147,27 @@ export interface RejudgeResult {
   changed: number
 }
 
+// ── 권한별 메뉴 (관리자) ──
+export interface PermissionTable {
+  roles: { code: string; label: string; system: boolean }[]
+  menus: { path: string; topLabel: string; groupLabel: string; label: string; permission: string }[]
+  functions: { code: string; label: string; description: string | null }[]
+  /** 권한 코드(role) → 부여된 권한 코드 목록 */
+  granted: Record<string, string[]>
+  /** 권한(role)별로 뺄 수 없는 코드 */
+  locked: Record<string, string[]>
+}
+export interface PermissionHistoryItem {
+  id: string
+  role: string
+  roleLabel: string
+  permission: string
+  permissionLabel: string
+  action: 'GRANT' | 'REVOKE'
+  at: string
+  actor: string
+}
+
 // ── 사용자 관리 (관리자) ──
 export interface AdminUser {
   id: string
@@ -198,6 +220,10 @@ export const api = {
   /** 만료된 사용자가 로그인 없이 해제를 요청한다 (본인 확인용으로 이메일·비밀번호를 다시 보낸다) */
   requestExpiryRelease: (email: string, password: string) => post<{ ok: true; message: string }>('/auth/expiry-release-request', { email, password }),
   logout: () => post<{ ok: true }>('/auth/logout'),
+  myMenus: () => get<{ menus: TopMenu[] }>('/menus/mine').then((r) => r.menus),
+  getPermissions: () => get<PermissionTable>('/admin/permissions'),
+  saveRolePermissions: (role: string, permissions: string[]) => put<{ role: string; granted: string[]; revoked: string[] }>(`/admin/roles/${role}/permissions`, { permissions }),
+  permissionHistory: () => get<{ items: PermissionHistoryItem[] }>('/admin/permissions/history').then((r) => r.items),
   listUsers: () => get<{ items: User[] }>('/users').then((r) => r.items),
 
   // ── 배정 ──

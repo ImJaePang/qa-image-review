@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { StatusBadge } from '@/components/assignment/badges'
 import { api } from '@/api'
 import { fmtDuration, fmtMs } from '@/lib/format'
-import { useCurrentUser } from '@/stores/auth'
+import { useCan } from '@/stores/auth'
 
 const GAP_OPTIONS = [3, 5, 10, 15, 30]
 
@@ -40,8 +40,7 @@ const Empty = ({ cols }: { cols: number }) => (
 )
 
 export function TimeAnalysisPage() {
-  const me = useCurrentUser()
-  const isAdmin = me?.role === 'admin'
+  const isAdmin = useCan('monitoring.view')
   const [gap, setGap] = useState(5)
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['monitoring', 'time', gap],
@@ -50,7 +49,7 @@ export function TimeAnalysisPage() {
     placeholderData: keepPreviousData,
   })
 
-  if (!isAdmin) return <p className="p-6 text-sm text-muted-foreground">관리자만 볼 수 있는 화면입니다.</p>
+  if (!isAdmin) return <p className="p-6 text-sm text-muted-foreground">이 화면을 쓸 권한이 없습니다.</p>
 
   // 담당자별 값을 가중 평균해 전체 요약을 만든다
   const timed = data?.reviewers.reduce((s, r) => s + r.timedDecisions, 0) ?? 0

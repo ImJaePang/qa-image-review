@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api } from '@/api'
 import { fmtDate, fmtDateTime } from '@/lib/domain'
 import { ASSIGNMENT_STATUSES, type Assignment, type AssignmentStatus } from '@/lib/types'
-import { useCurrentUser } from '@/stores/auth'
+import { useCan, useCurrentUser } from '@/stores/auth'
 import { cn } from '@/lib/utils'
 import { StatusBadge } from './badges'
 import { ImageReviewPanel } from './ImageReviewPanel'
@@ -78,7 +78,7 @@ function Body({ a }: { a: Assignment }) {
   const [noteDraft, setNoteDraft] = useState<string | null>(null)
   const note = noteDraft ?? a.inspectionNote
 
-  const isAdmin = me?.role === 'admin'
+  const isAdmin = useCan('assignment.manage') // 배정 관리 권한자 (남의 배정도 처리, 확인 완료)
   const isAssignee = me?.id === a.assigneeId
   const reviewed = a.counts.reviewed
   const total = a.counts.total

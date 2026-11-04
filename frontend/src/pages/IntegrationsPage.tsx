@@ -9,7 +9,7 @@ import { IntegrationFormDialog } from '@/components/integration/IntegrationFormD
 import { api, type Integration } from '@/api'
 import { fmtDateTime } from '@/lib/domain'
 import { cn } from '@/lib/utils'
-import { useCurrentUser } from '@/stores/auth'
+import { useCan } from '@/stores/auth'
 
 function Count({ label, value, tone }: { label: string; value: number; tone?: 'warn' | 'bad' }) {
   return (
@@ -85,8 +85,7 @@ function IntegrationCard({ item, onEdit, onFailed }: { item: Integration; onEdit
 }
 
 export function IntegrationsPage() {
-  const me = useCurrentUser()
-  const isAdmin = me?.role === 'admin'
+  const isAdmin = useCan('integration.manage')
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['integrations'],
     queryFn: api.listIntegrations,
@@ -97,7 +96,7 @@ export function IntegrationsPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [failedOf, setFailedOf] = useState<Integration | null>(null)
 
-  if (!isAdmin) return <p className="p-6 text-sm text-muted-foreground">관리자만 볼 수 있는 화면입니다.</p>
+  if (!isAdmin) return <p className="p-6 text-sm text-muted-foreground">이 화면을 쓸 권한이 없습니다.</p>
 
   const openForm = (item: Integration | null) => {
     setEditing(item)

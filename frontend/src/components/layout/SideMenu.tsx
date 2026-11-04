@@ -1,10 +1,11 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { MENU, topKeyOfPath } from '@/config/menu'
+import { topKeyOfPath, type TopMenu } from '@/config/menu'
 import { cn } from '@/lib/utils'
 
-export function SideMenu() {
+export function SideMenu({ menus }: { menus: TopMenu[] }) {
   const { pathname } = useLocation()
-  const top = MENU.find((m) => m.key === topKeyOfPath(pathname)) ?? MENU[0]
+  const top = menus.find((m) => m.key === topKeyOfPath(menus, pathname)) ?? menus[0]
+  if (!top) return <aside className="w-56 shrink-0 border-r bg-sidebar" />
 
   return (
     <aside className="w-56 shrink-0 overflow-auto border-r bg-sidebar p-3 text-sidebar-foreground">

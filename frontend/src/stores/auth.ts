@@ -37,6 +37,11 @@ export const useAuth = create<AuthState>()((set) => ({
 // 세션 만료(401) 시 로그인 화면으로 보낸다
 setUnauthorizedHandler(() => useAuth.setState({ user: null }))
 
+/** 이 권한 코드가 있는지 (예: useCan('rule.manage')) */
+export function useCan(code: string) {
+  return useAuth((s) => !!s.user?.permissions.includes(code))
+}
+
 export function useCurrentUser() {
   return useAuth((s) => s.user)
 }
