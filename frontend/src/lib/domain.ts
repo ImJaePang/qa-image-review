@@ -25,6 +25,10 @@ export const REASON_LABELS: Record<ReasonCode, string> = {
 export function fmtDate(iso: string) {
   return iso.slice(0, 10)
 }
+/** 서버 시각(UTC ISO)을 보는 사람의 현지 시간으로 표시한다 (YYYY-MM-DD HH:mm). 해석할 수 없으면 원문 그대로 */
 export function fmtDateTime(iso: string) {
-  return iso.slice(0, 16).replace('T', ' ')
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }

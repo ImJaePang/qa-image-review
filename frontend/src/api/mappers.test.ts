@@ -23,8 +23,8 @@ describe('영문 코드 ↔ 한글 매핑', () => {
 describe('toImageItem', () => {
   const base: ApiImageItem = {
     imageId: 'img_0001', fileName: 'a.png', width: 1920, height: 1080, modelVersion: 'v1', overallScore: 0.4,
-    boxes: [], previewUrl: '/api/images/img_0001/preview', thumbUrl: '/api/images/img_0001/thumb', heatmapUrl: null, verdict: 'DEFECT',
-    review: { status: 'NONE', comment: '', reviewedAt: null },
+    boxes: [], previewUrl: '/api/images/img_0001/preview', thumbUrl: '/api/images/img_0001/thumb', originalUrl: '/api/images/img_0001/original', heatmapUrl: null, verdict: 'DEFECT',
+    review: { status: 'NONE', comment: '', reviewedAt: null, reviewerName: null },
   }
 
   test('서버 코드를 한글로 바꾸고, 히트맵이 없으면 빈 문자열', () => {
@@ -35,7 +35,7 @@ describe('toImageItem', () => {
   })
 
   test('승인/반려 상태와 코멘트가 유지된다', () => {
-    const r = toImageItem({ ...base, review: { status: 'REJECTED', comment: '경계 이상', reviewedAt: '2026-11-02T00:00:00Z' } })
-    expect(r.review).toEqual({ status: '반려', comment: '경계 이상', reviewedAt: '2026-11-02T00:00:00Z' })
+    const r = toImageItem({ ...base, review: { status: 'REJECTED', comment: '경계 이상', reviewedAt: '2026-11-02T00:00:00Z', reviewerName: '김검수' } })
+    expect(r.review).toEqual({ status: '반려', comment: '경계 이상', reviewedAt: '2026-11-02T00:00:00Z', reviewerName: '김검수' })
   })
 })

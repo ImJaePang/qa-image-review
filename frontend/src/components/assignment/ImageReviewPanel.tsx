@@ -8,23 +8,48 @@ import { Textarea } from '@/components/ui/textarea'
 import { Slider } from '@/components/ui/slider'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { api } from '@/api'
-import { REASON_LABELS } from '@/lib/domain'
+import { REASON_LABELS, fmtDateTime } from '@/lib/domain'
+import { useAuth } from '@/stores/auth'
 import type { Assignment, ImageItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { ReasonBadge, ReviewMark, VerdictBadge } from './badges'
 
 type Overlay = 'both' | 'heatmap' | 'boxes' | 'off'
+/** 보기 모드: 미리보기(줄인 사본, 기본) / 원본 고정. 판정은 어느 모드든 원본 기준이고, 박스 좌표도 원본 픽셀 기준이다 */
+type ViewMode = 'preview' | 'original'
+const VIEW_MODE_KEY = 'qa.reviewViewMode'
+const PREFETCH_AHEAD = 2 // 원본 고정일 때 현재 이미지 뒤로 미리 받을 장수 (전체를 받지 않는다)
+
+// 사용자 편의 설정이므로 브라우저 저장소를 쓰되, 막혀 있어도 화면은 정상 동작해야 한다
+const loadViewMode = (): ViewMode => {
+  try {
+    return localStorage.getItem(VIEW_MODE_KEY) === 'original' ? 'original' : 'preview'
+  } catch {
+    return 'preview'
+  }
+}
+const saveViewMode = (m: ViewMode) => {
+  try {
+    localStorage.setItem(VIEW_MODE_KEY, m)
+  } catch {
+    /* 저장 실패는 무시 */
+  }
+}
 
 const PAGE_SIZE = 50
 const ROW_HEIGHT = 61
 type ImagePage = Awaited<ReturnType<typeof api.listImages>>
 
-function ImageViewer({ img, overlay, opacity }: { img: ImageItem; overlay: Overlay; opacity: number }) {
+function ImageViewer({ img, overlay, opacity, viewMode }: { img: ImageItem; overlay: Overlay; opacity: number; viewMode: ViewMode }) {
   const showHeat = !!img.heatmapUrl && (overlay === 'both' || overlay === 'heatmap')
   const showBoxes = overlay === 'both' || overlay === 'boxes'
   return (
     <div className="relative mx-auto aspect-video w-full overflow-hidden rounded-lg border bg-black">
+      {/* 미리보기는 항상 깔아 두고, 원본 고정이면 그 위에 원본을 얹는다 (원본이 내려오는 동안에도 빈 화면이 없다) */}
       <img src={img.previewUrl} alt={img.fileName} className="absolute inset-0 size-full object-fill" draggable={false} />
+      {viewMode === 'original' && (
+        <img key={img.imageId} src={img.originalUrl} alt="" className="absolute inset-0 size-full object-fill" draggable={false} />
+      )}
       {showHeat && (
         <img
           src={img.heatmapUrl}
@@ -64,6 +89,15 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
   const [index, setIndex] = useState(0)
   const [overlay, setOverlay] = useState<Overlay>('both')
   const [opacity, setOpacity] = useState(60)
+  const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
+  // 토글을 클릭하면 버튼이 포커스를 가져가 ←/→ 키를 토글 그룹이 먹어 버린다 → 바꾼 뒤 포커스를 풀어 이미지 이동 단축키가 계속 동작하게 한다
+  const releaseFocus = () => (document.activeElement as HTMLElement | null)?.blur?.()
+  const changeViewMode = (m: ViewMode) => {
+    setViewMode(m)
+    saveViewMode(m)
+    releaseFocus()
+  }
+  const me = useAuth((s) => s.user)
   const [draft, setDraft] = useState<{ id: string; text: string } | null>(null)
 
   // 가상 스크롤 목록: 전체 장수만큼 행을 잡고, 보이는 행이 속한 페이지(50장 단위)만 서버에서 불러온다.
@@ -146,7 +180,9 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
       api.reviewImage(aid, v.imageId, v.status, v.comment),
     onMutate: async (v) => {
       await qc.cancelQueries({ queryKey: ['images', aid] })
-      return { prev: patchReview(v.imageId, { status: v.status, comment: v.comment, reviewedAt: new Date().toISOString() }) }
+      return {
+        prev: patchReview(v.imageId, { status: v.status, comment: v.comment, reviewedAt: new Date().toISOString(), reviewerName: me?.name ?? null }),
+      }
     },
     onError: (e: Error, _v, ctx) => {
       ctx?.prev.forEach(([key, data]) => qc.setQueryData(key, data))
@@ -166,6 +202,15 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
     goNextUnreviewed(index + 1)
   }
 
+  // 원본 고정: 현재 이미지의 다음 몇 장만 미리 받아 둔다 (이미 본 것은 브라우저 캐시)
+  const prefetched = useRef<HTMLImageElement[]>([])
+  const nextUrls = viewMode === 'original' ? Array.from({ length: PREFETCH_AHEAD }, (_, k) => itemAt(index + 1 + k)?.originalUrl) : []
+  const nextKey = nextUrls.join('|')
+  useEffect(() => {
+    prefetched.current = nextUrls.filter((u): u is string => !!u).map((u) => Object.assign(new Image(), { src: u }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nextKey])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
@@ -175,6 +220,7 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
       else if (e.key.toLowerCase() === 'a') decide('승인')
       else if (e.key.toLowerCase() === 'r') decide('반려')
       else if (e.key.toLowerCase() === 'h') setOverlay((o) => (o === 'both' ? 'off' : 'both'))
+      else if (e.key.toLowerCase() === 'o') changeViewMode(viewMode === 'original' ? 'preview' : 'original')
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -230,12 +276,25 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
             variant="outline"
             size="sm"
             value={[overlay]}
-            onValueChange={(v) => v[0] && setOverlay(v[0] as Overlay)}
+            onValueChange={(v) => {
+              if (v[0]) setOverlay(v[0] as Overlay)
+              releaseFocus()
+            }}
           >
             <ToggleGroupItem value="both">둘 다</ToggleGroupItem>
             <ToggleGroupItem value="heatmap">히트맵</ToggleGroupItem>
             <ToggleGroupItem value="boxes">박스</ToggleGroupItem>
             <ToggleGroupItem value="off">끄기</ToggleGroupItem>
+          </ToggleGroup>
+          <ToggleGroup
+            variant="outline"
+            size="sm"
+            value={[viewMode]}
+            onValueChange={(v) => v[0] && changeViewMode(v[0] as ViewMode)}
+            aria-label="보기 모드"
+          >
+            <ToggleGroupItem value="preview">미리보기</ToggleGroupItem>
+            <ToggleGroupItem value="original">원본 고정</ToggleGroupItem>
           </ToggleGroup>
           <div className="flex w-48 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
             투명도
@@ -254,11 +313,12 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
             </Button>
           </div>
         </div>
-        <ImageViewer img={current} overlay={overlay} opacity={opacity} />
+        <ImageViewer img={current} overlay={overlay} opacity={opacity} viewMode={viewMode} />
         <p className="text-xs text-muted-foreground">
           단축키: <kbd className="rounded border px-1">←</kbd> <kbd className="rounded border px-1">→</kbd> 이동 ·{' '}
           <kbd className="rounded border px-1">A</kbd> 승인 · <kbd className="rounded border px-1">R</kbd> 반려 ·{' '}
-          <kbd className="rounded border px-1">H</kbd> 오버레이 토글
+          <kbd className="rounded border px-1">H</kbd> 오버레이 토글 ·{' '}
+          <kbd className="rounded border px-1">O</kbd> 원본/미리보기
         </p>
       </div>
 
@@ -308,6 +368,11 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
               <X className="size-4" /> 반려
             </Button>
           </div>
+          {review && review.status !== '미검토' && review.reviewedAt && (
+            <p className="text-xs text-muted-foreground" data-testid="last-review">
+              마지막 검수: {review.reviewerName ?? '알 수 없음'} · {fmtDateTime(review.reviewedAt)}
+            </p>
+          )}
           {!canReview && <p className="text-xs text-muted-foreground">‘점검중’ 상태에서 담당자만 검수할 수 있습니다.</p>}
         </div>
       </div>

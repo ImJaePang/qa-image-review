@@ -40,11 +40,15 @@ export interface ImageReview {
   status: ReviewStatus
   comment: string
   reviewedAt?: string | null
+  /** 마지막으로 검수한 사람 (미검토면 없음) */
+  reviewerName?: string | null
 }
 
 /** 배정 안의 이미지 한 장: 모델 결과 + 판정 + 현재 검수 상태 */
 export interface ImageItem extends ImageResult {
   thumbUrl: string
+  /** 원본 파일 (정밀 확인용, 판정은 항상 원본 기준) */
+  originalUrl: string
   verdict: Verdict
   review: ImageReview
 }
