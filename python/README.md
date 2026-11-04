@@ -29,8 +29,17 @@ npm run worker
 ```
 (선택) `.env`의 `PATCHCORE_MODEL_DIR`(학습 폴더), `PYTHON_BIN`(파이썬 실행 파일).
 
+## 평가 (정답 데이터로 모델 성능 재기)
+```
+.venv\Scripts\python evaluate.py --data ..\data\imageseal
+.venv\Scripts\python evaluate.py --data ..\data\imageseal --box-threshold 0.35 --report-name eval_box0.35   # 박스 기준만 바꿔 비교 (재학습 불필요)
+```
+- 결함 이미지 전부 + **학습에 쓰지 않은** 정상 이미지로 이미지 단위 AUROC, 컷오프별 잡는 비율/오탐, 박스 적중(IoU 기준 여러 개), 정상의 오탐 박스, 결함 종류별 결과, 속도를 낸다. 결과: `artifacts/patchcore/<이름>_report.json`, `<이름>_images.csv`.
+- 지표 계산(`metrics.py`)은 모델과 무관한 순수 함수라 다른 모델을 연결해도 같은 기준으로 비교할 수 있다.
+- 판정 규칙의 경계값은 정하지 않는다(DB 규칙의 몫). 대신 컷오프 표로 "얼마나 잡히고 오탐이 얼마인지" 본다.
+
 ## 테스트
-- 후처리(점수 변환·박스·히트맵): `.venv\Scripts\python -m unittest test_postprocess`
+- 지표·후처리(점수 변환·박스·히트맵): `.venv\Scripts\python -m unittest test_metrics test_postprocess`
 - 어댑터 프로토콜: `cd backend && npm test` (가짜 서버 사용, 파이썬 불필요)
 
 ## 점수 변환
