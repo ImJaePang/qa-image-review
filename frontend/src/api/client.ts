@@ -3,9 +3,12 @@
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  /** 서버가 주는 선택적 코드 (예: 로그인 거절 사유 PENDING/EXPIRED/DISABLED) */
+  code?: string
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.status = status
+    this.code = code
   }
 }
 
@@ -30,7 +33,7 @@ export async function request<T>(method: string, path: string, body?: unknown): 
   if (!res.ok) {
     // 로그인/가입 실패의 401은 세션 만료가 아니므로 제외
     if (res.status === 401 && !path.startsWith('/auth/login')) onUnauthorized?.()
-    throw new ApiError(res.status, data?.message ?? '요청에 실패했습니다.')
+    throw new ApiError(res.status, data?.message ?? '요청에 실패했습니다.', data?.code)
   }
   return data as T
 }

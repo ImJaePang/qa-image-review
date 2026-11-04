@@ -359,6 +359,11 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 2. 사용자 관리 화면 (+ 만료 해제 요청)
 3. 권한·메뉴 테이블, 권한별 메뉴 관리 화면, API 권한 검사 전환, 연구원 업로드
 
+### 2단계 화면 구현 메모
+- 목업 확정 후 구현. 상태 필터(칩)에 따라 열이 바뀌고(승인 대기: 신청 권한·신청일 / 만료: 만료일·마지막 로그인·해제 요청 …), 일괄 처리 버튼도 상태별로 정해진다(`lib/users.ts`의 `bulkActionsFor`). 전체 보기에서는 상태가 섞여 있어 일괄 처리를 숨긴다.
+- 선택은 필터·페이지가 바뀌면 비운다(보이지 않는 사용자를 처리하는 실수 방지). "조건에 맞는 전체 N명"은 1000건씩 id만 모아 선택하고, 처리할 때 100명씩 끊어 순서대로 호출해 결과를 합친다.
+- 가입 화면에 소속·연락처(선택), 로그인 화면에 만료 해제 요청 버튼(서버가 `code: EXPIRED`를 줄 때만) 추가.
+
 ### 2단계 API 구현 메모 (마이그레이션 006)
 - `user_profiles`(업체·부서·직급·연락처·업체 주소, users와 1:1)와 `user_history`(SIGNUP/APPROVE/REJECT/ENABLE/DISABLE/EXPIRE/EXPIRY_REQUEST/EXPIRY_RELEASE/ROLE/EXPIRES/PROFILE/PASSWORD_RESET). 프로필 항목은 `account.mjs`의 `PROFILE_FIELDS`와 마이그레이션만 고치면 늘릴 수 있다. 가입 폼의 프로필은 모두 선택 항목.
 - 관리자 API는 `/api/admin/users` (목록·상세·수정·`bulk`·`reset-password`). 처리는 모두 `bulk` 하나로 한다: `APPROVE`(신청 권한대로, 또는 `role` 지정) / `REJECT` / `DISABLE` / `ENABLE` / `RELEASE_EXPIRY`. 한 번에 최대 100명, 대상이 아닌 사용자(이미 처리됨·본인·없음)는 건너뛰고 사유를 돌려준다. 활성화(승인·재활성·만료 해제)는 사용기한을 오늘 + 1년으로 새로 잡는다.

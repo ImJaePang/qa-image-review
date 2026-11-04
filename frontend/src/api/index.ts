@@ -1,5 +1,6 @@
 // 백엔드 API 호출. 화면 코드는 한글 값만 다루고, 변환은 mappers에서 한다.
-import type { AssignmentListItem, AssignmentStatus, ImageItem, SignupRole, User, Verdict } from '@/lib/types'
+import type { AssignmentListItem, AssignmentStatus, ImageItem, Role, SignupRole, User, Verdict } from '@/lib/types'
+import type { BulkAction, BulkResult, UserProfile, UserStatus } from '@/lib/users'
 import { get, patch, post, put } from './client'
 import {
   REVIEW_CODE,
@@ -145,6 +146,39 @@ export interface RejudgeResult {
   changed: number
 }
 
+// ── 사용자 관리 (관리자) ──
+export interface AdminUser {
+  id: string
+  name: string
+  email: string
+  role: Role
+  status: UserStatus
+  requestedRole: SignupRole | null
+  expiresAt: string | null
+  lastLoginAt: string | null
+  expiryReleaseRequestedAt: string | null
+  createdAt: string
+  profile: UserProfile
+}
+export interface UserHistoryItem {
+  id: string
+  action: string
+  detail: Record<string, any>
+  at: string
+  actor: string | null
+}
+export interface AdminUserList extends Page<AdminUser> {
+  statusCounts: Record<UserStatus, number>
+  bulkMax: number
+}
+export interface UserQuery {
+  status?: UserStatus
+  role?: Role
+  q?: string
+  page: number
+  pageSize: number
+}
+
 export type ImageFilter = 'all' | 'unreviewed' | 'approved' | 'rejected'
 
 export interface Page<T> {
@@ -159,8 +193,10 @@ export const api = {
   me: () => get<{ user: User }>('/auth/me').then((r) => r.user),
   login: (email: string, password: string) => post<{ user: User }>('/auth/login', { email, password }).then((r) => r.user),
   // 가입은 승인 신청이다: 로그인되지 않고 승인 대기 안내만 돌려받는다
-  signup: (name: string, email: string, password: string, requestedRole: SignupRole) =>
-    post<{ status: 'PENDING'; message: string }>('/auth/signup', { name, email, password, requestedRole }),
+  signup: (name: string, email: string, password: string, requestedRole: SignupRole, profile: Partial<UserProfile>) =>
+    post<{ status: 'PENDING'; message: string }>('/auth/signup', { name, email, password, requestedRole, profile }),
+  /** 만료된 사용자가 로그인 없이 해제를 요청한다 (본인 확인용으로 이메일·비밀번호를 다시 보낸다) */
+  requestExpiryRelease: (email: string, password: string) => post<{ ok: true; message: string }>('/auth/expiry-release-request', { email, password }),
   logout: () => post<{ ok: true }>('/auth/logout'),
   listUsers: () => get<{ items: User[] }>('/users').then((r) => r.items),
 
@@ -214,6 +250,20 @@ export const api = {
   integrationHistory: (id: string) => get<{ items: IntegrationHistoryItem[] }>(`/integrations/${id}/history`).then((r) => r.items),
   integrationFailed: (id: string) => get<{ items: FailedImage[] }>(`/integrations/${id}/failed`).then((r) => r.items),
   retryIntegration: (id: string) => post<RetryResult>(`/integrations/${id}/retry`),
+
+  // ── 사용자 관리 (관리자) ──
+  listAdminUsers: (p: UserQuery) => {
+    const qs = new URLSearchParams({ page: String(p.page), pageSize: String(p.pageSize) })
+    if (p.status) qs.set('status', p.status)
+    if (p.role) qs.set('role', p.role)
+    if (p.q) qs.set('q', p.q)
+    return get<AdminUserList>(`/admin/users?${qs}`)
+  },
+  getAdminUser: (id: string) => get<AdminUser & { history: UserHistoryItem[] }>(`/admin/users/${id}`),
+  updateAdminUser: (id: string, input: { name?: string; role?: Role; expiresAt?: string; profile?: Partial<UserProfile> }) => patch<AdminUser>(`/admin/users/${id}`, input),
+  bulkUsers: (action: BulkAction, ids: string[], role?: Role) =>
+    post<BulkResult & { action: BulkAction }>('/admin/users/bulk', { action, ids: ids.map(Number), ...(role ? { role } : {}) }),
+  resetPassword: (id: string) => post<{ tempPassword: string }>(`/admin/users/${id}/reset-password`),
 
   // ── 판정 규칙 (관리자) ──
   listRules: () => get<RuleList>('/rules'),

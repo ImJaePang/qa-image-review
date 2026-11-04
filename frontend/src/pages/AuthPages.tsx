@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Moon, Sun } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,6 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Logo } from '@/components/layout/TopBar'
 import { useAuth, useCurrentUser } from '@/stores/auth'
 import { ROLE_LABEL, type SignupRole } from '@/lib/types'
+import { PROFILE_LABEL, type ProfileKey } from '@/lib/users'
+import { ApiError } from '@/api/client'
+import { api } from '@/api'
 import { useTheme } from '@/stores/theme'
 
 function AuthShell({ title, desc, children }: { title: string; desc: string; children: ReactNode }) {
@@ -42,6 +46,7 @@ export function LoginPage() {
   const [email, setEmail] = useState('admin@example.com')
   const [password, setPassword] = useState('1234')
   const [error, setError] = useState('')
+  const [expired, setExpired] = useState(false)
   const [busy, setBusy] = useState(false)
 
   if (ready && user) return <Navigate to="/review/assignments" replace />
@@ -52,6 +57,22 @@ export function LoginPage() {
     try {
       await login(email, password)
       navigate((loc.state as { from?: string } | null)?.from ?? '/review/assignments', { replace: true })
+    } catch (err) {
+      setError((err as Error).message)
+      setExpired(err instanceof ApiError && err.code === 'EXPIRED')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // 만료된 계정: 로그인할 수 없으므로 여기서 해제를 요청한다 (본인 확인으로 같은 이메일·비밀번호를 다시 보낸다)
+  const requestRelease = async () => {
+    setBusy(true)
+    try {
+      const r = await api.requestExpiryRelease(email.trim(), password)
+      setExpired(false)
+      setError('')
+      toast.success(r.message)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -71,6 +92,11 @@ export function LoginPage() {
           <Input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
+        {expired && (
+          <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={requestRelease}>
+            만료 해제 요청
+          </Button>
+        )}
         <Button type="submit" className="w-full" disabled={busy}>
           로그인
         </Button>
@@ -92,6 +118,7 @@ export function SignupPage() {
   const signup = useAuth((s) => s.signup)
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' })
   const [requestedRole, setRequestedRole] = useState<SignupRole>('qa')
+  const [profile, setProfile] = useState<Record<ProfileKey, string>>({ company: '', department: '', jobTitle: '', phone: '', companyAddress: '' })
   const [done, setDone] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -104,7 +131,7 @@ export function SignupPage() {
     setBusy(true)
     try {
       // 가입은 승인 신청이다. 신청한 권한은 참고용이고, 실제 권한은 관리자가 승인하며 정한다.
-      setDone(await signup(form.name, form.email, form.password, requestedRole))
+      setDone(await signup(form.name, form.email, form.password, requestedRole, profile))
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -142,6 +169,15 @@ export function SignupPage() {
         <div className="space-y-2">
           <Label htmlFor="pw2">비밀번호 확인</Label>
           <Input id="pw2" type="password" value={form.confirm} onChange={set('confirm')} required />
+        </div>
+        <div className="space-y-3 border-t pt-4">
+          <p className="text-sm font-medium">소속 · 연락처 <span className="font-normal text-muted-foreground">(선택)</span></p>
+          {(Object.keys(PROFILE_LABEL) as ProfileKey[]).map((k) => (
+            <div key={k} className="space-y-1.5">
+              <Label htmlFor={`p-${k}`}>{PROFILE_LABEL[k]}</Label>
+              <Input id={`p-${k}`} value={profile[k]} onChange={(e) => setProfile((p) => ({ ...p, [k]: e.target.value }))} />
+            </div>
+          ))}
         </div>
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">신청 권한</legend>

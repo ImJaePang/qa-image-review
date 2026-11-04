@@ -10,6 +10,7 @@ import { Placeholder } from '@/pages/Placeholder'
 import { IMPLEMENTED, MENU } from '@/config/menu'
 import { TimeAnalysisPage } from '@/pages/TimeAnalysisPage'
 import { IntegrationsPage } from '@/pages/IntegrationsPage'
+import { UsersPage } from '@/pages/UsersPage'
 import { RulesPage } from '@/pages/RulesPage'
 import { useAuth } from '@/stores/auth'
 
@@ -35,6 +36,7 @@ export default function App() {
               <Route path="/monitoring/time" element={<TimeAnalysisPage />} />
               <Route path="/settings/integrations" element={<IntegrationsPage />} />
               <Route path="/settings/rules" element={<RulesPage />} />
+              <Route path="/settings/users" element={<UsersPage />} />
               {placeholderPaths.map((p) => (
                 <Route key={p} path={p} element={<Placeholder />} />
               ))}

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { SignupRole, User } from '@/lib/types'
+import type { UserProfile } from '@/lib/users'
 import { api } from '@/api'
 import { setUnauthorizedHandler } from '@/api/client'
 
@@ -11,7 +12,7 @@ interface AuthState {
   init: () => Promise<void>
   login: (email: string, password: string) => Promise<void>
   /** 가입 신청. 로그인되지 않으며 승인 대기 안내 문구를 돌려준다 */
-  signup: (name: string, email: string, password: string, requestedRole: SignupRole) => Promise<string>
+  signup: (name: string, email: string, password: string, requestedRole: SignupRole, profile: Partial<UserProfile>) => Promise<string>
   logout: () => Promise<void>
 }
 
@@ -26,7 +27,7 @@ export const useAuth = create<AuthState>()((set) => ({
     }
   },
   login: async (email, password) => set({ user: await api.login(email.trim(), password) }),
-  signup: async (name, email, password, requestedRole) => (await api.signup(name, email, password, requestedRole)).message,
+  signup: async (name, email, password, requestedRole, profile) => (await api.signup(name, email, password, requestedRole, profile)).message,
   logout: async () => {
     await api.logout().catch(() => undefined)
     set({ user: null })
