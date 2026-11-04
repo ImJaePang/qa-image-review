@@ -5,11 +5,12 @@ AI가 생성한 이미지를 사전 검증한 뒤, QA 담당자가 화면에서 
 
 ## 구조
 ```
-frontend/   React + Vite + TypeScript + Tailwind + shadcn/ui (목 데이터로 동작)
-backend/    (예정) Node.js + PostgreSQL
+frontend/   React + Vite + TypeScript + Tailwind + shadcn/ui (백엔드 API에 연결)
+backend/    Node.js(Fastify) API + 파일 수신 워커, PostgreSQL
+python/     실제 모델(PatchCore) 학습·추론 서버·평가 도구
 db/init/    스키마·시드 SQL (컨테이너 최초 기동 시 자동 실행)
 db/migrations/  이후 변경 SQL (번호순, `npm run migrate`로 적용, 적용 이력은 schema_migrations)
-docs/       기획서(plan.md), 설계·진행 기록(design.md)
+docs/       기획서(plan.md), 설계·진행 기록(design.md), 사용 방법(guide.md), 개념 정리(study-notes.md)
 ```
 
 ## 실행 (프론트엔드)
@@ -59,7 +60,13 @@ npm run dev
 21. [x] 모델 평가 도구(`python/evaluate.py`, `metrics.py`): 정답 데이터로 이미지 AUROC·컷오프별 잡는 비율/오탐·박스 적중·결함 종류별·속도. 첫 결과(PatchCore): AUROC 0.683, 비율 이상(SCALE) 0.906은 잘 잡고 부품 개수(PART_COUNT) 0.563은 거의 무작위 — 연결 검증용 기준선이며 개선 후보는 design.md 9장 마지막
 22. [x] 비밀값 교체 스크립트(`npm run rotate-secrets`: .env의 DB 비밀번호·JWT_SECRET을 새 값으로, 값은 출력하지 않음), 실행·초기화·교체 절차 문서화(guide 4장)
 
-남은 후보(필요할 때): 모델 개선·다른 모델 비교(평가 도구 있음), 이메일 발송(임시 비밀번호), 다국어(design.md 6장), 로그인 시도 횟수 제한.
+남은 후보(필요할 때): 로그인 시도 횟수 제한(보안상 우선 추천), 모델 개선·다른 모델 비교(평가 도구 있음), 이메일 발송(임시 비밀번호), 다국어(design.md 6장).
+
+### 점검 메모 (2026-11-04)
+전체 점검 결과: 백엔드 테스트 208개·프론트 50개·파이썬 17개 모두 통과, `tsc -b`·`vite build` 성공. 정리할 작은 항목:
+- 프론트 린트(`npm run lint`, oxlint) 경고 13개, 오류 0. 대부분 모달을 열 때 `useEffect`에서 폼 상태를 채우는 패턴(`set-state-in-effect`: RoleEditDialog, UserEditDialog, IntegrationFormDialog, RulesPage, MenusPage). `RulesPage`의 `exhaustive-deps` 경고는 `activeKey`로 의도적으로 묶은 것이라 동작 문제는 없음. 고친다면 모달에 `key`를 주어 다시 마운트하는 방식으로.
+- 번들이 한 덩어리(약 770KB). 필요하면 페이지별 `React.lazy`로 나누기.
+- 화면(브라우저) 자동 테스트 없음.
 
 새 세션 시작: `README.md 읽고 이어서 해줘` 한 줄이면 된다 (CLAUDE.md가 README → design.md 순서로 읽도록 안내함).
 
@@ -67,18 +74,19 @@ npm run dev
 
 ## 진행 현황
 - [x] 프론트엔드 목업: 로그인/회원가입, 레이아웃(상단·좌측·우측), 배정 리스트, 신규 배정 모달, 배정 상세(이미지 검수·이력)
-- [x] DB 스키마 + `docker-compose.yml` (Postgres 16, 11개 테이블 + 뷰 2개, 기동/제약 검증 완료)
+- [x] DB 스키마 + `docker-compose.yml` (Postgres 16, 최초 11개 테이블 + 뷰 2개로 시작, 마이그레이션 012까지 적용 후 26개 테이블(`schema_migrations` 포함) + 뷰 2개)
 - [x] JSON → DB 적재 스크립트: `cd backend && npm install && npm run load-mock` (3천 장 적재 검증, 재실행해도 중복 없음)
 - [x] 목 이미지/모델 결과 생성 스크립트: `node backend/scripts/generate-mock.mjs --count 3000` → `data/images/`(git 제외), `results.jsonl`은 5장 JSON 계약 + originalPath/durationMs
 - [x] 백엔드 API (Fastify): 인증, 배정 목록/상세/신규/상태 변경/점검 내용, 이미지 페이지 조회, 검수 저장, 파일 서빙 (`cd backend && npm run dev`, 포트 3000)
 - [x] 규칙 관리 API(새 버전 쌓기·미리보기·재판정·되돌리기), 썸네일 생성 (화면 포함)
-- [x] 프론트를 실제 API로 교체, 3천 장 대응 (서버 페이지네이션 + 가상 스크롤 + 낙관적 업데이트). 3천 장 배정 생성→사전배치→점검→검수 흐름을 브라우저로 확인 (`captures/2026-11-02_v0.2-api-connected`)
+- [x] 프론트를 실제 API로 교체, 3천 장 대응 (서버 페이지네이션 + 가상 스크롤 + 낙관적 업데이트). 3천 장 배정 생성→점검→검수 흐름을 브라우저로 확인 (당시에는 사전배치 단계가 있었고 이후 ⑥에서 제거) (`captures/2026-11-02_v0.2-api-connected`)
 - [x] 모니터링 페이지(소요 시간 분석): 담당자별 검수 속도, 배정별 소요, 모델 처리 시간, 수신 배치 기록 (`/monitoring/time`, 관리자 전용)
 - [x] 파일 수신 사전 검증 1단계: 마이그레이션 체계(`npm run migrate`), 수신 상태 컬럼, 연계/수신 배치 테이블, 모델 어댑터 계약 검증 + 목 어댑터
 - [x] 파일 수신 사전 검증 2단계: 폴더 스캔(안정 판정, 매직바이트, 해시 연결), 순차 추론, 실패 격리, 워커 (`npm run worker`)
 - [x] 워커 단일 실행 잠금(advisory lock), 시작 시 고아 파일·PROCESSING 정리
-- [ ] 파일 수신 사전 검증 후속 (위 구현 순서 4~9)
-- [ ] (선택) 실제 모델 연동
+- [x] 파일 수신 사전 검증 후속 (위 구현 순서 4~9: 파일 API, 실제 이미지 생성, 썸네일, 검수 화면 보기 모드, PRECHECKED 제거, 연계 관리)
+- [x] 실제 모델 연동 (PatchCore 어댑터 + Python 추론 서버, 평가 도구로 기준선 측정)
+- [x] 사용자·권한·메뉴 관리, 규칙 관리, 이미지 업로드, 비밀값 교체 (위 구현 순서 10~22)
 
 ## 전체 실행 (개발)
 ```
