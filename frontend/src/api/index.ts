@@ -2,7 +2,8 @@
 import type { AssignmentListItem, AssignmentStatus, ImageItem, Role, SignupRole, User, Verdict } from '@/lib/types'
 import type { TopMenu } from '@/config/menu'
 import type { BulkAction, BulkResult, UserProfile, UserStatus } from '@/lib/users'
-import { del, get, patch, post, put } from './client'
+import { ApiError, del, get, patch, post, put } from './client'
+import type { UploadLimits } from '@/lib/upload'
 import {
   REVIEW_CODE,
   STATUS_CODE,
@@ -154,6 +155,33 @@ export interface RoleInfo {
   signupSelectable: boolean
   /** false = 사용 안 함: 새로 고르는 목록에서는 빠지고, 이미 가진 사용자의 이름 표시에는 계속 쓴다 */
   active: boolean
+}
+
+// ── 이미지 업로드 ──
+export interface UploadBatch {
+  id: string
+  createdBy: string
+  createdByName: string
+  expectedCount: number
+  memo: string | null
+  status: 'OPEN' | 'DONE' | 'CANCELED'
+  createdAt: string
+  finishedAt: string | null
+  uploaded: number // 서버가 받은 장수
+  rejected: number // 업로드 실패(이미지가 아님·크기 등)
+  waiting: number // 수신 폴더에서 대기 (아직 images로 등록 전)
+  processing: number
+  done: number
+  failed: number // 검사 실패
+}
+export type UploadFileState = 'REJECTED' | 'WAITING' | 'PROCESSING' | 'DONE' | 'FAILED'
+export interface UploadFileItem {
+  id: string
+  name: string
+  size: number
+  state: UploadFileState
+  reason: string | null
+  imageKey: string | null
 }
 
 // ── 권한 관리 (관리자) ──
@@ -338,6 +366,37 @@ export const api = {
   bulkUsers: (action: BulkAction, ids: string[], role?: Role) =>
     post<BulkResult & { action: BulkAction }>('/admin/users/bulk', { action, ids: ids.map(Number), ...(role ? { role } : {}) }),
   resetPassword: (id: string) => post<{ tempPassword: string }>(`/admin/users/${id}/reset-password`),
+
+  // ── 이미지 업로드 ──
+  uploadLimits: () => get<{ limits: UploadLimits }>('/uploads/limits').then((r) => r.limits),
+  createUpload: (expectedCount: number, memo?: string) => post<{ batch: UploadBatch; limits: UploadLimits }>('/uploads', { expectedCount, ...(memo ? { memo } : {}) }),
+  /** 파일 1장 전송 (본문 = 원본 바이트). 서버가 이미지가 아니라고 하면 status가 REJECTED로 돌아온다 */
+  uploadFile: async (batchId: string, file: File): Promise<{ id: string; status: 'RECEIVED' | 'REJECTED'; reason?: string }> => {
+    let res: Response
+    try {
+      res = await fetch(`/api/uploads/${batchId}/files?name=${encodeURIComponent(file.name)}`, { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: file })
+    } catch {
+      throw new ApiError(0, '서버에 연결할 수 없습니다.') // 네트워크 오류는 다시 시도해 볼 만하다
+    }
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      // 권한·배치 상태 문제(4xx)는 다시 시도해도 같으므로 재시도하지 않게 표시한다
+      throw Object.assign(new ApiError(res.status, data?.message ?? '업로드에 실패했습니다.'), { retryable: res.status >= 500 })
+    }
+    return data.file
+  },
+  completeUpload: (batchId: string, cancel = false) => post<{ batch: UploadBatch }>(`/uploads/${batchId}/complete`, cancel ? { cancel: true } : {}),
+  listUploads: (p: { mine?: boolean; q?: string; page: number; pageSize: number }) => {
+    const qs = new URLSearchParams({ page: String(p.page), pageSize: String(p.pageSize) })
+    if (p.mine) qs.set('mine', 'true')
+    if (p.q) qs.set('q', p.q)
+    return get<{ items: UploadBatch[]; total: number; page: number; pageSize: number; canSeeAll: boolean; counts: { total: number; mine: number } }>(`/uploads?${qs}`)
+  },
+  getUpload: (id: string, p: { state?: UploadFileState; page: number; pageSize: number }) => {
+    const qs = new URLSearchParams({ page: String(p.page), pageSize: String(p.pageSize) })
+    if (p.state) qs.set('state', p.state)
+    return get<{ batch: UploadBatch; files: UploadFileItem[]; total: number; page: number; pageSize: number }>(`/uploads/${id}?${qs}`)
+  },
 
   // ── 권한 관리 (관리자) ──
   listAdminRoles: (p: { status?: 'ACTIVE' | 'INACTIVE'; q?: string; page: number; pageSize: number }) => {
