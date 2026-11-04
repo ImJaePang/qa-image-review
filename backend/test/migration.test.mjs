@@ -27,7 +27,7 @@ const rejects = async (sql, params, pattern) => {
 test('이미 적용된 마이그레이션은 다시 실행되지 않는다', async () => {
   assert.deepEqual(await applyMigrations(db), [])
   const { rows } = await db.query('SELECT name FROM schema_migrations ORDER BY name')
-  assert.deepEqual(rows.map((r) => r.name), ['001_ingest_foundation.sql', '002_remove_prechecked.sql', '003_integration_history.sql', '004_rule_history.sql', '005_user_status.sql'])
+  assert.deepEqual(rows.map((r) => r.name), ['001_ingest_foundation.sql', '002_remove_prechecked.sql', '003_integration_history.sql', '004_rule_history.sql', '005_user_status.sql', '006_user_profile_history.sql'])
 })
 
 test('기존 이미지는 수신 완료(DONE)이고 원래 파일명이 보존된다', async () => {

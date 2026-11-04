@@ -1,7 +1,8 @@
 import { pool } from '../db.mjs'
 import { config } from '../config.mjs'
 import { httpError } from '../errors.mjs'
-import { BLOCKED_MESSAGE, EXPIRY_YEARS, SIGNUP_ROLES, effectiveStatus } from '../account.mjs'
+import { BLOCKED_MESSAGE, EXPIRY_YEARS, PROFILE_FIELDS, SIGNUP_ROLES, effectiveStatus, rejectUnknownProfile } from '../account.mjs'
+import { txWith } from '../tx.mjs'
 
 const toUser = (r) => ({ id: String(r.id), name: r.name, email: r.email, role: r.role })
 
@@ -38,7 +39,10 @@ export default async function authRoutes(app) {
       // 비밀번호가 맞은 뒤에만 상태를 알려 준다 (틀린 경우에 알려 주면 계정 존재 여부가 드러난다)
       const status = effectiveStatus(rows[0])
       if (status !== 'ACTIVE') {
-        if (status === 'EXPIRED' && rows[0].status === 'ACTIVE') await pool.query(`UPDATE users SET status = 'EXPIRED' WHERE id = $1`, [rows[0].id])
+        if (status === 'EXPIRED' && rows[0].status === 'ACTIVE') {
+          await pool.query(`UPDATE users SET status = 'EXPIRED' WHERE id = $1`, [rows[0].id])
+          await pool.query(`INSERT INTO user_history (user_id, action, detail) VALUES ($1, 'EXPIRE', $2)`, [rows[0].id, JSON.stringify({ expiresAt: rows[0].expires_at })])
+        }
         throw httpError(403, BLOCKED_MESSAGE[status], status)
       }
       // 로그인할 때마다 사용기한을 로그인 시각 + 1년으로 밀어 준다 (장기 미사용 계정 차단용)
@@ -54,6 +58,7 @@ export default async function authRoutes(app) {
   app.post(
     '/auth/signup',
     {
+      preValidation: async (req) => rejectUnknownProfile(req.body?.profile),
       schema: {
         body: {
           type: 'object',
@@ -63,22 +68,57 @@ export default async function authRoutes(app) {
             email: { type: 'string', minLength: 3, maxLength: 200 },
             password: { type: 'string', minLength: 4, maxLength: 200 },
             requestedRole: { enum: SIGNUP_ROLES },
+            // 소속·연락처는 모두 선택 항목
+            profile: {
+              type: 'object',
+              additionalProperties: false,
+              properties: Object.fromEntries(Object.keys(PROFILE_FIELDS).map((k) => [k, { type: 'string', maxLength: k === 'companyAddress' ? 300 : 100 }])),
+            },
           },
         },
       },
     },
     async (req, reply) => {
-      const { name, email, password, requestedRole = 'qa' } = req.body
+      const { name, email, password, requestedRole = 'qa', profile = {} } = req.body
       try {
-        await pool.query(
-          `INSERT INTO users (name, email, password_hash, role, status, requested_role) VALUES ($1, $2, crypt($3, gen_salt('bf')), 'qa', 'PENDING', $4)`,
-          [name.trim(), email.trim(), password, requestedRole],
-        )
+        await txWith(pool, async (client) => {
+          const { rows } = await client.query(
+            `INSERT INTO users (name, email, password_hash, role, status, requested_role) VALUES ($1, $2, crypt($3, gen_salt('bf')), 'qa', 'PENDING', $4) RETURNING id`,
+            [name.trim(), email.trim(), password, requestedRole],
+          )
+          const cols = Object.values(PROFILE_FIELDS)
+          await client.query(`INSERT INTO user_profiles (user_id, ${cols.join(', ')}) VALUES ($1, ${cols.map((_, i) => `$${i + 2}`).join(', ')})`, [
+            rows[0].id,
+            ...Object.keys(PROFILE_FIELDS).map((k) => profile[k]?.trim() || null),
+          ])
+          await client.query(`INSERT INTO user_history (user_id, action, detail) VALUES ($1, 'SIGNUP', $2)`, [rows[0].id, JSON.stringify({ requestedRole })])
+        })
         return reply.code(201).send({ status: 'PENDING', message: BLOCKED_MESSAGE.PENDING })
       } catch (err) {
         if (err.code === '23505') throw httpError(409, '이미 가입된 이메일입니다.')
         throw err
       }
+    },
+  )
+
+  // 만료 해제 요청: 로그인할 수 없는 만료 사용자가 보낸다. 본인 확인을 위해 이메일·비밀번호를 다시 받는다.
+  // 요청은 계정 상태를 바꾸는 것이 아니라 관리자에게 '요청했다'는 표시를 남기는 것이다 (해제는 관리자가 한다).
+  app.post(
+    '/auth/expiry-release-request',
+    { schema: { body: { type: 'object', required: ['email', 'password'], properties: { email: { type: 'string', maxLength: 200 }, password: { type: 'string', maxLength: 200 } } } } },
+    async (req) => {
+      const { email, password } = req.body
+      const { rows } = await pool.query(
+        'SELECT id, status, expires_at FROM users WHERE lower(email) = lower($1) AND password_hash = crypt($2, password_hash)',
+        [email, password],
+      )
+      if (!rows.length) throw httpError(401, '이메일 또는 비밀번호가 올바르지 않습니다.')
+      if (effectiveStatus(rows[0]) !== 'EXPIRED') throw httpError(409, '만료된 계정만 해제를 요청할 수 있습니다.')
+      await txWith(pool, async (client) => {
+        await client.query('UPDATE users SET expiry_release_requested_at = now() WHERE id = $1', [rows[0].id])
+        await client.query(`INSERT INTO user_history (user_id, action) VALUES ($1, 'EXPIRY_REQUEST')`, [rows[0].id])
+      })
+      return { ok: true, message: '만료 해제를 요청했습니다. 관리자가 처리하면 로그인할 수 있습니다.' }
     },
   )
 
