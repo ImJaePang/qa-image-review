@@ -219,7 +219,7 @@ export function MenusPage() {
       </div>
       <p className="text-xs text-muted-foreground">
         <Lock className="mr-1 inline size-3" />
-        관리자의 「사용자 관리」「권한별 메뉴」는 잠글 수 없습니다 (아무도 권한을 바꿀 수 없게 되는 것을 막기 위해). 권한(역할) 종류 추가는 이후 확장 과제입니다.
+        관리자의 「사용자 관리」「권한 관리」「권한별 메뉴」는 뺄 수 없습니다 (아무도 설정을 바꿀 수 없게 되는 것을 막기 위해). 권한 종류는 「권한 관리」에서 추가·수정합니다.
       </p>
 
       <section className="space-y-2">

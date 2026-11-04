@@ -271,7 +271,8 @@ export const api = {
   getPermissions: () => get<PermissionTable>('/admin/permissions'),
   saveRolePermissions: (role: string, permissions: string[]) => put<{ role: string; granted: string[]; revoked: string[] }>(`/admin/roles/${role}/permissions`, { permissions }),
   permissionHistory: () => get<{ items: PermissionHistoryItem[] }>('/admin/permissions/history').then((r) => r.items),
-  listUsers: () => get<{ items: User[] }>('/users').then((r) => r.items),
+  /** 신규 배정의 담당자 후보 (권한에 '배정받기'가 있는 사용 중 계정) */
+  listAssignees: () => get<{ items: User[] }>('/assignees').then((r) => r.items),
 
   // ── 배정 ──
   async listAssignments(p: { status?: AssignmentStatus; q?: string; page: number; pageSize: number }) {

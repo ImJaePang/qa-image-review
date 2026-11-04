@@ -14,8 +14,7 @@ const VERDICTS: Verdict[] = ['정상', '의심', '불량']
 
 export function NewAssignmentDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient()
-  const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: api.listUsers, enabled: open })
-  const qaUsers = users.filter((u) => u.role === 'qa')
+  const { data: assignees = [] } = useQuery({ queryKey: ['assignees'], queryFn: api.listAssignees, enabled: open })
 
   const [title, setTitle] = useState('')
   const [assigneeId, setAssigneeId] = useState('')
@@ -29,7 +28,7 @@ export function NewAssignmentDialog({ open, onOpenChange }: { open: boolean; onO
   const create = useMutation({
     mutationFn: api.createAssignment,
     onSuccess: (a) => {
-      toast.success(`${a.id} 배정 완료 (${a.count}장 → ${qaUsers.find((u) => u.id === assigneeId)?.name ?? '-'})`)
+      toast.success(`${a.id} 배정 완료 (${a.count}장 → ${assignees.find((u) => u.id === assigneeId)?.name ?? '-'})`)
       qc.invalidateQueries({ queryKey: ['assignments'] })
       qc.invalidateQueries({ queryKey: ['unassigned'] })
       setTitle('')
@@ -58,12 +57,12 @@ export function NewAssignmentDialog({ open, onOpenChange }: { open: boolean; onO
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>담당자</Label>
-              <Select items={qaUsers.map((u) => ({ value: u.id, label: u.name }))} value={assigneeId} onValueChange={(v) => setAssigneeId(v ?? "")}>
+              <Select items={assignees.map((u) => ({ value: u.id, label: u.name }))} value={assigneeId} onValueChange={(v) => setAssigneeId(v ?? "")}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="QA 담당자 선택" />
                 </SelectTrigger>
                 <SelectContent>
-                  {qaUsers.map((u) => (
+                  {assignees.map((u) => (
                     <SelectItem key={u.id} value={u.id}>
                       {u.name}
                     </SelectItem>
