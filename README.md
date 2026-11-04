@@ -56,7 +56,10 @@ npm run dev
 
 20. [x] 이미지 업로드: API(`/api/uploads`, 마이그레이션 012; 배치·파일 기록, 수신 폴더 반입, 처리 현황 추적, 수천 장 대응) + 화면(데이터 > 이미지 > 이미지 업로드: 파일·폴더 끌어놓기/선택, 4장씩 동시 전송·재시도·일시 중지·취소, 업로드 이력과 파일별 처리 현황)
 
-그 다음: 업로드 파일을 실제 모델로 돌려 보는 비교·평가(필요할 때). 이후 계획(다국어 등)은 design.md 6장.
+21. [x] 모델 평가 도구(`python/evaluate.py`, `metrics.py`): 정답 데이터로 이미지 AUROC·컷오프별 잡는 비율/오탐·박스 적중·결함 종류별·속도. 첫 결과(PatchCore): AUROC 0.683, 비율 이상(SCALE) 0.906은 잘 잡고 부품 개수(PART_COUNT) 0.563은 거의 무작위 — 연결 검증용 기준선이며 개선 후보는 design.md 9장 마지막
+22. [x] 비밀값 교체 스크립트(`npm run rotate-secrets`: .env의 DB 비밀번호·JWT_SECRET을 새 값으로, 값은 출력하지 않음), 실행·초기화·교체 절차 문서화(guide 4장)
+
+남은 후보(필요할 때): 모델 개선·다른 모델 비교(평가 도구 있음), 이메일 발송(임시 비밀번호), 다국어(design.md 6장), 로그인 시도 횟수 제한.
 
 새 세션 시작: `README.md 읽고 이어서 해줘` 한 줄이면 된다 (CLAUDE.md가 README → design.md 순서로 읽도록 안내함).
 
@@ -83,7 +86,7 @@ docker compose up -d                          # DB
 cd backend && npm install && npm run migrate     # 스키마 변경분 적용 (이미 적용된 것은 건너뜀)
 npm run load-mock                             # 최초 1회: 목 데이터 생성(generate-mock) 후 적재
 npm run dev                                   # API, 포트 3000 (.env의 JWT_SECRET 필요)
-npm run worker                                # (선택) 파일 수신 워커: data/images/ingest/inbox 에 이미지를 넣으면 5초 주기로 수신·추론
+npm run worker                                # (선택) 파일 수신 워커: inbox에 이미지를 넣거나 화면에서 업로드하면 5초 주기로 수신·추론 (실제 모델: python/README.md)
 cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api는 API_PORT(기본 3000)로 프록시)
 # 윈도우가 3000을 예약해 EACCES가 나면: API_PORT=3101 을 앞에 붙여 backend/frontend를 모두 실행
 ```
@@ -92,9 +95,10 @@ cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api는 API
 
 ## 테스트
 ```
-cd backend && npm test      # 백엔드 테스트 171개 (API 통합, 파일 API, 연계 관리, 규칙 관리, 사본 생성, 마이그레이션, 모델 계약·목 어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
-cd frontend && npm test     # 단위 테스트 33개 (영문 코드↔한글 매핑, 페이징, 사용자 관리 문구 등)
+cd backend && npm test      # 백엔드 테스트 208개 (API 통합, 사용자·권한·메뉴, 업로드, 수신·워커, 마이그레이션, 모델 계약·어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
+cd frontend && npm test     # 단위 테스트 50개 (영문 코드↔한글 매핑, 페이징, 사용자·권한 문구, 업로드 전송 큐 등)
 cd frontend && npx tsc -b   # 타입 체크
+cd python && .venv/Scripts/python -m unittest test_metrics test_postprocess   # 파이썬 단위 테스트 17개 (모델 없이 실행)
 ```
 개발 DB(`qa_review`)는 테스트가 건드리지 않는다. 화면(브라우저) 자동 테스트는 아직 없다.
 
