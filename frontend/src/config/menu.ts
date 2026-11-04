@@ -15,7 +15,7 @@ export interface TopMenu {
 }
 
 /** 아직 화면을 만들지 않은 메뉴 경로 (DB에는 있고, 열면 준비 중 화면이 나온다) */
-export const PLACEHOLDER_PATHS = ['/home/dashboard', '/review/my-assignments', '/review/history', '/data/images', '/data/model-runs', '/data/upload']
+export const PLACEHOLDER_PATHS = ['/home/dashboard', '/review/my-assignments', '/review/history', '/data/images', '/data/model-runs']
 
 export const allLeaves = (menus: TopMenu[]) => menus.flatMap((m) => m.groups.flatMap((g) => g.items))
 

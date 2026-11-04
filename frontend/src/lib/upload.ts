@@ -121,3 +121,36 @@ export function summarizeProgress(b: { done: number; waiting: number; processing
   if (b.rejected) parts.push(`업로드 실패 ${b.rejected.toLocaleString('ko-KR')}`)
   return parts.join(' · ') || '-'
 }
+
+/** 업로드한 파일 한 개의 처리 상태 (서버 `GET /uploads/:id` 의 state) */
+export type UploadFileState = 'REJECTED' | 'WAITING' | 'PROCESSING' | 'DONE' | 'FAILED'
+export const UPLOAD_STATES: UploadFileState[] = ['WAITING', 'PROCESSING', 'DONE', 'FAILED', 'REJECTED']
+export const UPLOAD_STATE_LABEL: Record<UploadFileState, string> = {
+  WAITING: '수신 대기',
+  PROCESSING: '검사 중',
+  DONE: '완료',
+  FAILED: '검사 실패',
+  REJECTED: '업로드 실패',
+}
+
+/** 바이트를 읽기 쉽게 (1.9MB, 4.2GB) */
+export function fmtBytes(n: number): string {
+  if (n < 1024) return `${n}B`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let v = n / 1024
+  let i = 0
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  return `${v >= 100 || Number.isInteger(v) ? Math.round(v) : v.toFixed(1)}${units[i]}`
+}
+
+/** 남은 시간 문구. 아직 알 수 없으면 null */
+export function fmtEta(done: number, total: number, elapsedMs: number): string | null {
+  if (done < 5 || elapsedMs < 2000 || done >= total) return null
+  const sec = Math.round(((total - done) * elapsedMs) / done / 1000)
+  if (sec < 60) return `약 ${Math.max(sec, 1)}초 남음`
+  const m = Math.round(sec / 60)
+  return m < 60 ? `약 ${m}분 남음` : `약 ${Math.floor(m / 60)}시간 ${m % 60}분 남음`
+}

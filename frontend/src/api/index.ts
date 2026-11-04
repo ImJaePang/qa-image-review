@@ -3,7 +3,7 @@ import type { AssignmentListItem, AssignmentStatus, ImageItem, Role, SignupRole,
 import type { TopMenu } from '@/config/menu'
 import type { BulkAction, BulkResult, UserProfile, UserStatus } from '@/lib/users'
 import { ApiError, del, get, patch, post, put } from './client'
-import type { UploadLimits } from '@/lib/upload'
+import type { UploadFileState, UploadLimits } from '@/lib/upload'
 import {
   REVIEW_CODE,
   STATUS_CODE,
@@ -174,7 +174,7 @@ export interface UploadBatch {
   done: number
   failed: number // 검사 실패
 }
-export type UploadFileState = 'REJECTED' | 'WAITING' | 'PROCESSING' | 'DONE' | 'FAILED'
+export type { UploadFileState }
 export interface UploadFileItem {
   id: string
   name: string

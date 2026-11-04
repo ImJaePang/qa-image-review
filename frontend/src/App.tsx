@@ -10,6 +10,7 @@ import { Placeholder } from '@/pages/Placeholder'
 import { PLACEHOLDER_PATHS } from '@/config/menu'
 import { MenusPage } from '@/pages/MenusPage'
 import { RolesPage } from '@/pages/RolesPage'
+import { UploadPage } from '@/pages/UploadPage'
 import { TimeAnalysisPage } from '@/pages/TimeAnalysisPage'
 import { IntegrationsPage } from '@/pages/IntegrationsPage'
 import { UsersPage } from '@/pages/UsersPage'
@@ -35,6 +36,7 @@ export default function App() {
               <Route path="/monitoring/time" element={<TimeAnalysisPage />} />
               <Route path="/settings/integrations" element={<IntegrationsPage />} />
               <Route path="/settings/rules" element={<RulesPage />} />
+              <Route path="/data/upload" element={<UploadPage />} />
               <Route path="/settings/users" element={<UsersPage />} />
               <Route path="/settings/roles" element={<RolesPage />} />
               <Route path="/settings/menus" element={<MenusPage />} />

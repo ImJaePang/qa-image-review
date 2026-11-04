@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { classifyFiles, runQueue, summarizeProgress } from './upload'
+import { classifyFiles, fmtBytes, fmtEta, runQueue, summarizeProgress } from './upload'
 
 const limits = { maxFileBytes: 50 * 1024 * 1024, maxBatchFiles: 3, extensions: ['.png', '.jpg'] }
 const noSleep = async () => {}
@@ -116,5 +116,21 @@ describe('summarizeProgress', () => {
   test('0인 항목은 빼고 천 단위 구분', () => {
     expect(summarizeProgress({ done: 2711, waiting: 286, processing: 0, failed: 3, rejected: 0 })).toBe('완료 2,711 · 수신 대기 286 · 검사 실패 3')
     expect(summarizeProgress({ done: 0, waiting: 0, processing: 0, failed: 0, rejected: 0 })).toBe('-')
+  })
+})
+
+describe('fmtBytes / fmtEta', () => {
+  test('바이트 표기', () => {
+    expect(fmtBytes(900)).toBe('900B')
+    expect(fmtBytes(1928730)).toBe('1.8MB')
+    expect(fmtBytes(4.2 * 1024 ** 3)).toBe('4.2GB')
+    expect(fmtBytes(2 * 1024 * 1024)).toBe('2MB')
+  })
+  test('남은 시간은 충분히 진행된 뒤에만 보여 준다', () => {
+    expect(fmtEta(2, 100, 10000)).toBeNull() // 아직 표본이 적다
+    expect(fmtEta(100, 100, 10000)).toBeNull() // 끝남
+    expect(fmtEta(50, 100, 50_000)).toBe('약 50초 남음')
+    expect(fmtEta(10, 100, 100_000)).toBe('약 15분 남음')
+    expect(fmtEta(10, 40, 10_000)).toBe('약 30초 남음')
   })
 })
