@@ -247,6 +247,13 @@ describe('배정 흐름 (생성 → 점검 → 완료 → 확인)', () => {
     assert.equal(p2.body.total, 6)
   })
 
+  test('목록 페이징 규칙: 기본 20건, 최대 1000건까지 고를 수 있다 (1001은 400)', async () => {
+    const def = await api('GET', '/api/assignments', admin)
+    assert.equal(def.body.pageSize, 20)
+    assert.equal((await api('GET', '/api/assignments?pageSize=1000', admin)).body.pageSize, 1000)
+    assert.equal((await api('GET', '/api/assignments?pageSize=1001', admin)).status, 400)
+  })
+
   test('점검 내용 저장은 담당자만, 이력에 남는다', async () => {
     assert.equal((await api('PUT', `/api/assignments/${code}/note`, qa2, { note: 'x' })).status, 403)
     assert.equal((await api('PUT', `/api/assignments/${code}/note`, qa1, { note: '메모' })).status, 200)

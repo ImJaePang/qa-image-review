@@ -1,6 +1,7 @@
 import { pool, tx } from '../db.mjs'
 import { httpError } from '../errors.mjs'
 import { LATEST_RUN, latestVerdict } from '../sql.mjs'
+import { pagingQuery } from '../paging.mjs'
 
 const STATUSES = ['ASSIGNED', 'IN_REVIEW', 'REVIEWED', 'CONFIRMED']
 const VERDICTS = ['NORMAL', 'SUSPECT', 'DEFECT']
@@ -65,8 +66,7 @@ export default async function assignmentRoutes(app) {
           properties: {
             status: { type: 'string', enum: STATUSES },
             q: { type: 'string', maxLength: 100 },
-            page: { type: 'integer', minimum: 1, default: 1 },
-            pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+            ...pagingQuery,
           },
         },
       },

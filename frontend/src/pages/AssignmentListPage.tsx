@@ -1,20 +1,21 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Pagination } from '@/components/common/Pagination'
 import { StatusBadge } from '@/components/assignment/badges'
 import { NewAssignmentDialog } from '@/components/assignment/NewAssignmentDialog'
 import { AssignmentDetailDialog } from '@/components/assignment/AssignmentDetailDialog'
 import { api } from '@/api'
 import { fmtDate } from '@/lib/domain'
+import { DEFAULT_PAGE_SIZE } from '@/lib/paging'
 import { ASSIGNMENT_STATUSES, type AssignmentStatus } from '@/lib/types'
 import { useCurrentUser } from '@/stores/auth'
 
-const PAGE_SIZE = 8
 const ALL = 'all'
 
 export function AssignmentListPage() {
@@ -25,6 +26,7 @@ export function AssignmentListPage() {
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<string>(ALL)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE)
 
   // 검색어는 입력이 멈춘 뒤에 서버로 보낸다
   const [debouncedQ, setDebouncedQ] = useState('')
@@ -34,20 +36,19 @@ export function AssignmentListPage() {
   }, [q])
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['assignments', 'list', { status, q: debouncedQ, page }],
+    queryKey: ['assignments', 'list', { status, q: debouncedQ, page, pageSize }],
     queryFn: () =>
       api.listAssignments({
         status: status === ALL ? undefined : (status as AssignmentStatus),
         q: debouncedQ || undefined,
         page,
-        pageSize: PAGE_SIZE,
+        pageSize,
       }),
     placeholderData: keepPreviousData,
   })
 
   const rows = data?.items ?? []
   const total = data?.total ?? 0
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const statusCount = (s: AssignmentStatus) => data?.statusCounts[s] ?? 0
 
   return (
@@ -190,20 +191,16 @@ export function AssignmentListPage() {
         </Table>
       </div>
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <span>총 {total}건</span>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon-sm" disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label="이전 페이지">
-            <ChevronLeft className="size-4" />
-          </Button>
-          <span className="tabular-nums">
-            {page} / {pages}
-          </span>
-          <Button variant="outline" size="icon-sm" disabled={page >= pages} onClick={() => setPage(page + 1)} aria-label="다음 페이지">
-            <ChevronRight className="size-4" />
-          </Button>
-        </div>
-      </div>
+      <Pagination
+        total={total}
+        page={page}
+        pageSize={pageSize}
+        onPage={setPage}
+        onPageSize={(n) => {
+          setPageSize(n)
+          setPage(1)
+        }}
+      />
 
       <NewAssignmentDialog open={newOpen} onOpenChange={setNewOpen} />
       <AssignmentDetailDialog id={openId} onClose={() => setParams({})} />
