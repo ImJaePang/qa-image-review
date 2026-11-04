@@ -8,6 +8,7 @@ import { isUsable } from './account.mjs'
 import { loadPermissions } from './permissions.mjs'
 import permissionRoutes from './routes/permissions.mjs'
 import roleAdminRoutes from './routes/roles.mjs'
+import uploadRoutes from './routes/uploads.mjs'
 import authRoutes from './routes/auth.mjs'
 import assignmentRoutes from './routes/assignments.mjs'
 import imageRoutes from './routes/images.mjs'
@@ -65,6 +66,7 @@ export async function buildApp(opts = {}) {
   await app.register(userAdminRoutes, { prefix: '/api' })
   await app.register(permissionRoutes, { prefix: '/api' })
   await app.register(roleAdminRoutes, { prefix: '/api' })
+  await app.register(uploadRoutes, { prefix: '/api' })
   await app.register(fileRoutes, { prefix: '/api' })
 
   app.addHook('onClose', async () => {

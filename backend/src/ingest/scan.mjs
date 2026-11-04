@@ -64,6 +64,8 @@ async function register(pool, { cfg, filesDir, batchId, file, status, error, sha
       const dest = join(destDir, `${key}${ext}`)
       const stored = toStoredPath(filesDir, dest)
       await client.query('UPDATE images SET image_key = $2, original_path = $3, source_path = $3 WHERE id = $1', [id, key, stored])
+      // 화면에서 올린 파일이면(수신 폴더 이름 up<id>__…) 업로드 기록에 images 행을 이어 둔다
+      await client.query('UPDATE upload_files SET image_id = $1 WHERE stored_name = $2 AND image_id IS NULL', [id, file.name])
       if (status === 'FAILED') await bumpBatch(client, batchId, { failed: true })
       await moveFile(file.full, dest)
       moved = dest

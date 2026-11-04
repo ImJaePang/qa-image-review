@@ -11,6 +11,8 @@ export const config = {
   filesDir: resolve(e.FILES_DIR ?? resolve(import.meta.dirname, '../../data/images')),
   // 파일 수신 연계의 허용 루트: 연계가 쓰는 폴더는 모두 이 아래여야 한다. 완료 파일을 파일 API(/api/images/:key/...)로 서빙하려면 filesDir 아래에 둔다.
   ingestRoot: resolve(e.INGEST_ROOT ?? resolve(e.FILES_DIR ?? resolve(import.meta.dirname, '../../data/images'), 'ingest')),
+  // 이미지 업로드 한 번(배치)에 올릴 수 있는 최대 장수. 파일은 한 장씩 나눠 전송하므로 수천 장도 가능하다.
+  uploadMaxBatchFiles: Number(e.UPLOAD_MAX_BATCH_FILES ?? 10000),
   ruleName: e.RULE_NAME ?? 'score-threshold',
   modelAdapter: e.MODEL_ADAPTER ?? 'mock',
   // MODEL_ADAPTER=patchcore일 때: 학습 결과 폴더와 파이썬 실행 파일 (없으면 python/ 아래 기본값)
