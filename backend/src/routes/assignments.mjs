@@ -146,6 +146,17 @@ export default async function assignmentRoutes(app) {
     return counts
   })
 
+  // 담당자 후보: 사용 중인 계정 중 권한에 '배정받기(assignment.receive)'가 있는 사람. 신규 배정 화면의 선택 목록
+  app.get('/assignees', async (req) => {
+    if (!canManage(req.user)) throw httpError(403, '배정 권한이 없습니다.')
+    const { rows } = await pool.query(
+      `SELECT u.id, u.name, u.email, u.role FROM users u
+         JOIN role_permissions rp ON rp.role_code = u.role AND rp.permission_code = 'assignment.receive'
+        WHERE u.status = 'ACTIVE' AND (u.expires_at IS NULL OR u.expires_at > now()) ORDER BY u.id`,
+    )
+    return { items: rows.map((r) => ({ id: String(r.id), name: r.name, email: r.email, role: r.role })) }
+  })
+
   // 신규 배정 (관리자): 조건에 맞는 미배정 이미지를 자동 선택, 검수 화면 순서는 점수 낮은 순
   app.post(
     '/assignments',
@@ -171,8 +182,13 @@ export default async function assignmentRoutes(app) {
       if (!/^\d+$/.test(String(assigneeId))) throw httpError(400, '담당자가 올바르지 않습니다.')
 
       const created = await tx(async (db) => {
-        const assignee = await db.query('SELECT id, name FROM users WHERE id = $1', [assigneeId])
+        const assignee = await db.query('SELECT id, name, role, status, expires_at FROM users WHERE id = $1', [assigneeId])
         if (!assignee.rowCount) throw httpError(400, '담당자를 찾을 수 없습니다.')
+        const a0 = assignee.rows[0]
+        // 담당자는 사용 중인 계정이고 권한에 '배정받기'가 있어야 한다 (화면 목록과 같은 기준을 서버도 검사)
+        const usable = a0.status === 'ACTIVE' && (!a0.expires_at || a0.expires_at > new Date())
+        const receives = (await db.query(`SELECT 1 FROM role_permissions WHERE role_code = $1 AND permission_code = 'assignment.receive'`, [a0.role])).rowCount > 0
+        if (!usable || !receives) throw httpError(400, '배정을 받을 수 없는 사용자입니다.')
         // 동시에 두 건이 같은 이미지를 집지 않도록 직렬화
         await db.query('SELECT pg_advisory_xact_lock(1001)')
 

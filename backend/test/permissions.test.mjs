@@ -56,7 +56,7 @@ describe('표 조회와 저장', () => {
     const r = (await api('GET', '/api/admin/permissions', admin)).body
     assert.deepEqual(r.roles.map((x) => x.code), ['admin', 'researcher', 'qa'])
     assert.equal(r.menus.length, 12)
-    assert.deepEqual(r.functions.map((f) => f.code), ['assignment.manage', 'image.view_all', 'image.upload'])
+    assert.deepEqual(r.functions.map((f) => f.code), ['assignment.manage', 'image.view_all', 'image.upload', 'assignment.receive'])
     assert.deepEqual(r.locked.admin, ['user.manage', 'role.manage', 'menu.manage'])
   })
 
@@ -167,5 +167,44 @@ describe('권한 종류는 roles 테이블이 정한다 (코드에 고정 목록
     const id = (await pool.query(`SELECT id FROM users WHERE email = 'qa1@example.com'`)).rows[0].id
     assert.equal((await api('PATCH', `/api/admin/users/${id}`, admin, { role: 'boss' })).status, 400)
     assert.equal((await api('POST', '/api/admin/users/bulk', admin, { action: 'APPROVE', ids: [Number(id)], role: 'boss' })).status, 400)
+  })
+})
+
+describe('배정받기(assignment.receive): 담당자 후보를 권한이 정한다', () => {
+  const ids = async () => Object.fromEntries((await pool.query(`SELECT email, id FROM users`)).rows.map((r) => [r.email, String(r.id)]))
+  const assign = (assigneeId) => api('POST', '/api/assignments', admin, { title: '담당자 검사', assigneeId, dueDate: '2030-01-01', verdicts: ['NORMAL'], count: 1 })
+  const candidates = async () => (await api('GET', '/api/assignees', admin)).body.items.map((u) => u.email).sort()
+
+  test('기본은 QA 권한 사용자만 후보 (관리자·연구원은 아님), QA 본인은 목록을 볼 수 없다', async () => {
+    const c = await candidates()
+    assert.ok(c.includes('qa1@example.com'))
+    assert.ok(!c.includes('admin@example.com') && !c.includes('qa3@example.com')) // qa3은 연구원으로 바꿔 둠
+    assert.equal((await api('GET', '/api/assignees', qa1)).status, 403)
+  })
+
+  test('권한별 메뉴에서 연구원에게 배정받기를 켜면 후보가 되고 배정도 된다, 끄면 다시 빠지고 서버도 거부', async () => {
+    const u = await ids()
+    assert.equal((await assign(u['qa3@example.com'])).status, 400) // 아직 못 받는다
+    const cur = await granted('researcher')
+    assert.equal((await put('researcher', [...cur, 'assignment.receive'])).status, 200)
+    assert.ok((await candidates()).includes('qa3@example.com'))
+    assert.equal((await assign(u['qa3@example.com'])).status, 201)
+    assert.equal((await put('researcher', cur)).status, 200)
+    assert.ok(!(await candidates()).includes('qa3@example.com'))
+    assert.equal((await assign(u['qa3@example.com'])).status, 400)
+  })
+
+  test('권한에 배정받기가 없는 계정(관리자)이나 없는 사용자는 담당자가 될 수 없다', async () => {
+    const u = await ids()
+    assert.equal((await assign(u['admin@example.com'])).status, 400)
+    assert.equal((await assign('999999')).status, 400)
+  })
+
+  test('새 권한을 만들어 배정받기만 켜도 후보에 나타난다 (코드 변경 없이)', async () => {
+    assert.equal((await api('POST', '/api/admin/roles', admin, { code: 'inspector', label: '검사원' })).status, 201)
+    await pool.query(`INSERT INTO users (name, email, password_hash, role, status, expires_at) VALUES ('검사원1', 'insp@example.com', 'x', 'inspector', 'ACTIVE', now() + interval '1 year')`)
+    assert.ok(!(await candidates()).includes('insp@example.com'))
+    await put('inspector', ['assignment.receive'])
+    assert.ok((await candidates()).includes('insp@example.com'))
   })
 })
