@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { LogOut, Moon, ScanSearch, Sun } from 'lucide-react'
+import { ROLE_LABEL } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { MENU, topKeyOfPath } from '@/config/menu'
@@ -53,7 +54,7 @@ export function TopBar() {
         {user && (
           <div className="mr-2 flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">{user.name}</span>
-            <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{user.role === 'admin' ? '관리자' : 'QA'}</Badge>
+            <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{ROLE_LABEL[user.role]}</Badge>
           </div>
         )}
         <Button variant="ghost" size="icon" onClick={toggle} aria-label="테마 전환">

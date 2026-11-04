@@ -1,4 +1,4 @@
-// 마이그레이션 001·002 검증: 기존 데이터 보존, 새 제약, 수정일시 트리거, 재실행 안전성
+// 마이그레이션 001~005 검증: 기존 데이터 보존, 새 제약, 수정일시 트리거, 재실행 안전성
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import pg from 'pg'
@@ -27,7 +27,7 @@ const rejects = async (sql, params, pattern) => {
 test('이미 적용된 마이그레이션은 다시 실행되지 않는다', async () => {
   assert.deepEqual(await applyMigrations(db), [])
   const { rows } = await db.query('SELECT name FROM schema_migrations ORDER BY name')
-  assert.deepEqual(rows.map((r) => r.name), ['001_ingest_foundation.sql', '002_remove_prechecked.sql', '003_integration_history.sql', '004_rule_history.sql'])
+  assert.deepEqual(rows.map((r) => r.name), ['001_ingest_foundation.sql', '002_remove_prechecked.sql', '003_integration_history.sql', '004_rule_history.sql', '005_user_status.sql'])
 })
 
 test('기존 이미지는 수신 완료(DONE)이고 원래 파일명이 보존된다', async () => {

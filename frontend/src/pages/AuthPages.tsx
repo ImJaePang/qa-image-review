@@ -1,12 +1,13 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Moon, Sun } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Logo } from '@/components/layout/TopBar'
 import { useAuth, useCurrentUser } from '@/stores/auth'
+import { ROLE_LABEL, type SignupRole } from '@/lib/types'
 import { useTheme } from '@/stores/theme'
 
 function AuthShell({ title, desc, children }: { title: string; desc: string; children: ReactNode }) {
@@ -89,8 +90,9 @@ export function LoginPage() {
 
 export function SignupPage() {
   const signup = useAuth((s) => s.signup)
-  const navigate = useNavigate()
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' })
+  const [requestedRole, setRequestedRole] = useState<SignupRole>('qa')
+  const [done, setDone] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value })
@@ -101,9 +103,8 @@ export function SignupPage() {
     if (form.password !== form.confirm) return setError('비밀번호 확인이 일치하지 않습니다.')
     setBusy(true)
     try {
-      // 가입은 항상 QA 담당자 역할 (관리자 지정은 서버/DB에서만)
-      await signup(form.name, form.email, form.password)
-      navigate('/review/assignments', { replace: true })
+      // 가입은 승인 신청이다. 신청한 권한은 참고용이고, 실제 권한은 관리자가 승인하며 정한다.
+      setDone(await signup(form.name, form.email, form.password, requestedRole))
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -111,8 +112,20 @@ export function SignupPage() {
     }
   }
 
+  if (done)
+    return (
+      <AuthShell title="가입 신청 완료" desc="관리자 승인 후 로그인할 수 있습니다">
+        <div className="space-y-4">
+          <p className="rounded-md bg-muted p-3 text-sm">{done}</p>
+          <Link to="/login" className={buttonVariants({ className: 'w-full' })}>
+            로그인 화면으로
+          </Link>
+        </div>
+      </AuthShell>
+    )
+
   return (
-    <AuthShell title="회원가입" desc="새 계정을 만들어 시작하세요">
+    <AuthShell title="회원가입" desc="가입 신청 후 관리자가 승인하면 사용할 수 있습니다">
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="name">이름</Label>
@@ -130,9 +143,21 @@ export function SignupPage() {
           <Label htmlFor="pw2">비밀번호 확인</Label>
           <Input id="pw2" type="password" value={form.confirm} onChange={set('confirm')} required />
         </div>
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">신청 권한</legend>
+          <div className="flex gap-4 text-sm">
+            {(['qa', 'researcher'] as const).map((r) => (
+              <label key={r} className="flex items-center gap-1.5">
+                <input type="radio" name="requestedRole" checked={requestedRole === r} onChange={() => setRequestedRole(r)} />
+                {ROLE_LABEL[r]}
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">실제 권한은 관리자가 승인하면서 정합니다.</p>
+        </fieldset>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button type="submit" className="w-full" disabled={busy}>
-          가입하기
+          가입 신청
         </Button>
         <p className="text-center text-sm text-muted-foreground">
           이미 계정이 있나요?{' '}

@@ -6,6 +6,7 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import sharp from 'sharp'
 import { call, loginAs, resetTestDb, startApp } from './helpers.mjs'
+import { pool } from '../src/db.mjs'
 
 let app
 let admin, qa1, qa2
@@ -43,12 +44,64 @@ describe('인증', () => {
     assert.equal(res.cookies[0].httpOnly, true)
   })
 
-  test('가입은 항상 qa 역할 (role을 보내도 무시), 중복 이메일은 409', async () => {
-    const r = await api('POST', '/api/auth/signup', null, { name: '신규', email: 'new@example.com', password: '1234', role: 'admin' })
-    assert.equal(r.status, 201)
-    assert.equal(r.body.user.role, 'qa')
+  test('가입은 승인 대기(PENDING)로 만들어지고 로그인되지 않는다 (role을 보내도 무시, 쿠키 없음)', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: '신규', email: 'new@example.com', password: '1234', role: 'admin', requestedRole: 'researcher' } })
+    assert.equal(res.statusCode, 201)
+    assert.equal(JSON.parse(res.body).status, 'PENDING')
+    assert.equal(res.cookies.length, 0)
+    const row = (await pool.query(`SELECT role, status, requested_role FROM users WHERE email = 'new@example.com'`)).rows[0]
+    assert.deepEqual(row, { role: 'qa', status: 'PENDING', requested_role: 'researcher' })
     const dup = await api('POST', '/api/auth/signup', null, { name: '신규', email: 'new@example.com', password: '1234' })
     assert.equal(dup.status, 409)
+  })
+
+  test('신청 권한은 연구원/QA만 가능하다 (관리자 신청은 400), 생략하면 QA', async () => {
+    assert.equal((await api('POST', '/api/auth/signup', null, { name: 'x', email: 'x1@example.com', password: '1234', requestedRole: 'admin' })).status, 400)
+    await api('POST', '/api/auth/signup', null, { name: 'x', email: 'x2@example.com', password: '1234' })
+    assert.equal((await pool.query(`SELECT requested_role FROM users WHERE email = 'x2@example.com'`)).rows[0].requested_role, 'qa')
+  })
+
+  test('로그인 안내는 비밀번호가 맞을 때만 상태별로 다르다 (승인 대기/만료/비활성)', async () => {
+    const wrong = await loginAs(app, 'new@example.com', 'wrong')
+    assert.equal(wrong.res.statusCode, 401) // 틀리면 상태를 알려 주지 않는다
+    const pending = await loginAs(app, 'new@example.com')
+    assert.equal(pending.res.statusCode, 403)
+    assert.equal(JSON.parse(pending.res.body).code, 'PENDING')
+    assert.equal(pending.res.cookies.length, 0)
+
+    await pool.query(`UPDATE users SET status = 'DISABLED' WHERE email = 'new@example.com'`)
+    assert.equal(JSON.parse((await loginAs(app, 'new@example.com')).res.body).code, 'DISABLED')
+
+    await pool.query(`UPDATE users SET status = 'ACTIVE', expires_at = now() - interval '1 day' WHERE email = 'new@example.com'`)
+    const expired = await loginAs(app, 'new@example.com')
+    assert.equal(expired.res.statusCode, 403)
+    assert.equal(JSON.parse(expired.res.body).code, 'EXPIRED')
+    assert.equal((await pool.query(`SELECT status FROM users WHERE email = 'new@example.com'`)).rows[0].status, 'EXPIRED') // 상태도 만료로 기록된다
+  })
+
+  test('로그인하면 사용기한이 로그인 시각 + 1년으로 갱신되고 마지막 로그인이 남는다', async () => {
+    await pool.query(`UPDATE users SET expires_at = now() + interval '1 day', last_login_at = NULL WHERE email = 'qa3@example.com'`)
+    assert.equal((await loginAs(app, 'qa3@example.com')).res.statusCode, 200)
+    const r = (await pool.query(`SELECT last_login_at IS NOT NULL AS logged, expires_at - now() AS left FROM users WHERE email = 'qa3@example.com'`)).rows[0]
+    assert.equal(r.logged, true)
+    assert.ok(r.left.days >= 364, `사용기한 남은 일수: ${r.left.days}`)
+  })
+
+  test('이미 발급된 토큰도 계정이 비활성/만료되면 즉시 막힌다, 담당자 목록에도 안 나온다', async () => {
+    const { headers } = await loginAs(app, 'qa2@example.com')
+    assert.equal((await api('GET', '/api/assignments', headers)).status, 200)
+    await pool.query(`UPDATE users SET status = 'DISABLED' WHERE email = 'qa2@example.com'`)
+    assert.equal((await api('GET', '/api/assignments', headers)).status, 401)
+    assert.ok(!(await api('GET', '/api/users', admin)).body.items.some((u) => u.email === 'qa2@example.com'))
+    await pool.query(`UPDATE users SET status = 'ACTIVE' WHERE email = 'qa2@example.com'`)
+    assert.equal((await api('GET', '/api/assignments', headers)).status, 200)
+  })
+
+  test('권한은 토큰이 아니라 DB의 현재 값을 따른다 (강등 즉시 반영)', async () => {
+    await pool.query(`UPDATE users SET role = 'researcher' WHERE email = 'qa3@example.com'`)
+    const { headers } = await loginAs(app, 'qa3@example.com')
+    assert.equal((await api('GET', '/api/auth/me', headers)).body.user.role, 'researcher')
+    await pool.query(`UPDATE users SET role = 'qa' WHERE email = 'qa3@example.com'`)
   })
 
   test('입력 검증: 너무 짧은 비밀번호는 400', async () => {

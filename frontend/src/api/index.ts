@@ -1,5 +1,5 @@
 // 백엔드 API 호출. 화면 코드는 한글 값만 다루고, 변환은 mappers에서 한다.
-import type { AssignmentListItem, AssignmentStatus, ImageItem, User, Verdict } from '@/lib/types'
+import type { AssignmentListItem, AssignmentStatus, ImageItem, SignupRole, User, Verdict } from '@/lib/types'
 import { get, patch, post, put } from './client'
 import {
   REVIEW_CODE,
@@ -158,8 +158,9 @@ export const api = {
   // ── 인증 ──
   me: () => get<{ user: User }>('/auth/me').then((r) => r.user),
   login: (email: string, password: string) => post<{ user: User }>('/auth/login', { email, password }).then((r) => r.user),
-  signup: (name: string, email: string, password: string) =>
-    post<{ user: User }>('/auth/signup', { name, email, password }).then((r) => r.user),
+  // 가입은 승인 신청이다: 로그인되지 않고 승인 대기 안내만 돌려받는다
+  signup: (name: string, email: string, password: string, requestedRole: SignupRole) =>
+    post<{ status: 'PENDING'; message: string }>('/auth/signup', { name, email, password, requestedRole }),
   logout: () => post<{ ok: true }>('/auth/logout'),
   listUsers: () => get<{ items: User[] }>('/users').then((r) => r.items),
 

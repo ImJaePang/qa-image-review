@@ -92,7 +92,11 @@ export interface Assignment extends AssignmentListItem {
   history: HistoryEntry[]
 }
 
-export type Role = 'admin' | 'qa'
+export type Role = 'admin' | 'researcher' | 'qa'
+/** 가입할 때 신청할 수 있는 권한 (관리자는 신청 불가) */
+export type SignupRole = Exclude<Role, 'admin'>
+
+export const ROLE_LABEL: Record<Role, string> = { admin: '관리자', researcher: '연구원', qa: 'QA' }
 
 export interface User {
   id: string
