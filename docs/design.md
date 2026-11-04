@@ -405,10 +405,17 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 - 담당자 목록(`GET /users`)은 사용 가능한 계정만 돌려준다.
 - 만료 해제 요청 접수(`expiry_release_requested_at`)와 승인·반려는 2단계에서 한다. 그 전까지 승인은 DB에서 직접.
 
-### 실제 모델 검토 (2026-11-04, 검토 완료 · 구현은 결정 대기)
+### 실제 모델 검토와 PatchCore 연결 (2026-11-04)
 - **후보**: Anomalib(코드 Apache-2.0)의 PatchCore 먼저(학습이 단순: 정상 이미지의 패치 특징을 메모리 뱅크에 저장, 이상 점수·이상 맵을 낸다). EfficientAD는 그 다음. MVTec AD는 CC BY-NC-SA라 쓰지 않는다.
 - **환경**: RTX 4060 Ti 16GB, Python 3.12 있음, torch·anomalib 미설치(설치 시 CUDA torch 수 GB). 백엔드는 Node(sharp)라 모델은 **별도 Python 프로세스**로 두고 Node 어댑터가 호출한다(ONNX 내보내기는 PatchCore의 메모리 뱅크 검색 때문에 번거로워 제외).
 - **데이터**: `data/images/real` 300장 = 정상 203 + 결함 97(`ground_truth.jsonl`에 박스). 정상 중 일부로 학습, 나머지 정상 + 결함으로 평가. 주의: 이 이미지는 장면·각도가 다양한 생성 이미지라 "같은 물건을 같은 자세로 찍은 공장 이미지"를 가정하는 PatchCore에 불리하다. 성능은 낮을 수 있고, 지금은 품질 판단이 목적이 아니라 **어댑터 연결이 목적**이다.
 - **계약과의 간극(결정 필요)**: ① 점수는 0~1이어야 하는데 PatchCore 원점수는 상한이 없다 → 정상 검증 이미지의 분포로 0~1 정규화하고, 정규화 기준을 모델 버전에 묶어 기록(판정 임계값은 계속 `rules`). ② 박스: 이상 맵을 임계로 잘라 연결 영역의 외접 박스를 만들고 **원본 픽셀**로 환산(후처리). ③ `reasonCode`: PatchCore는 원인을 구분하지 못한다 → **결정: 계약에 `UNKNOWN`(원인 미분류)을 추가**(마이그레이션 010, 화면 표시 '원인 미분류'). 원인을 지어내 채우지 않는다. 목 모델은 기존 6개 원인만 계속 쓴다(`CAUSE_CODES`). ④ 히트맵 PNG는 Python이 만든다.
 - **연결 방식(제안)**: `backend/src/model/patchcore.mjs`(어댑터, `MODEL_ADAPTER=patchcore`)가 `python/` 아래의 추론 서버(상주, 모델 1회 로드)에 이미지 경로를 보내고 5장 JSON을 받는다. 어댑터는 기존처럼 `assertValidResult`로 검사. `modelVersion = patchcore-<백본>-<학습 데이터 해시>`.
 - **라이선스**: 백본 가중치(wide_resnet50_2, ImageNet 사전학습)의 상업 이용 조건은 미확인(데이터셋 ImageNet의 약관 확인 필요). 연습·비상업 범위에서는 문제 없고, 상업 전환 전에 확인한다. 회사 데이터는 학습·평가에 쓰지 않는다.
+
+#### 구현 메모 (PatchCore 어댑터)
+- 구조: `backend/src/model/patchcore.mjs`(어댑터) ↔ stdin/stdout JSON Lines ↔ `python/serve.py`(상주, 모델 1회 로드). 모델 폴더의 `meta.json`이 `modelVersion`·점수 기준·박스 설정을 담고, 서버가 보고한 버전이 meta와 다르면 어댑터가 거부한다(판정 기록이 거짓이 되지 않게). 프로세스 사망·시간 초과는 그 이미지만 실패로 처리하고 다음 요청에서 다시 띄운다. 설정: `MODEL_ADAPTER=patchcore`, 선택 `PATCHCORE_MODEL_DIR`, `PYTHON_BIN`. 자세한 사용법은 `python/README.md`.
+- 점수 방향은 기존 규칙과 같다(높을수록 정상). 원점수 → 심각도(정상 검증 점수의 중앙값=0, 95백분위=0.5) → `1 − 심각도`. 이상 맵은 가우시안 평활로 최댓값이 이미지 점수보다 낮아 **기준을 따로**(`mapCalibration`) 둔다 — 처음에 이를 놓쳐 불량(0.26)인데 박스가 하나도 없는 이미지가 나왔고, 기준 분리로 해결했다. 점수 기준·박스 설정이 바뀌면 `modelVersion` 끝의 해시(`-c…`)가 바뀐다.
+- 학습은 anomalib의 Lightning 루프를 쓰지 않고 직접 돈다(정상 패치 특징 수집 → `fit()` 코어셋). 입력 320×576(원본 비율 유지에 가깝게; 256×256 정사각 변환은 쓰지 않음). 정상 203장 중 120장 학습(약 4분, RTX 4060 Ti), 83장은 점수 기준용.
+- 추론 속도: GPU에서 이미지당 약 0.1초(첫 장은 CUDA 준비로 수백 ms).
+- **확인한 것(품질 평가가 아님)**: 정상 3장 + 결함 3장을 워커로 흘려 끝까지 처리됨(DB에 `patchcore-…` 모델 버전, 점수·판정·박스(`UNKNOWN`)·히트맵 PNG 저장). 결함 3장은 판정 DEFECT 1·SUSPECT 1·NORMAL 1, 박스는 정답 영역 안의 작은 박스 1개 — 이 데이터(자세·장면이 제각각인 생성 이미지)에서는 PatchCore 성능이 높지 않을 것이라는 사전 예상과 같다. 체계적 평가(이미지 AUROC, 박스 겹침)와 다른 모델 비교는 필요할 때 `ground_truth.jsonl`로 한다.

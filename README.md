@@ -50,7 +50,9 @@ npm run dev
 
 17. [x] 권한 관리: `/api/admin/roles`(만들기·수정·설명·사용 안 함/다시 사용·삭제, 이력; 마이그레이션 009), 삭제 대신 「사용 안 함」이 기본(cascade 없음, 사용자·이력 없을 때만 삭제), 화면(설정 > 사용자 > 권한 관리: 목록·통합 모달)과 권한별 메뉴 표 열 머리의 설명 툴팁
 
-그 다음: 연구원 업로드 — 설계 9장. 실제 모델 어댑터 검토(Anomalib 후보, 라이선스 확인 먼저). 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 design.md 6장.
+18. [x] 사유 코드 `UNKNOWN`(원인 미분류) 추가(마이그레이션 010). 실제 모델 어댑터(PatchCore, Anomalib): `MODEL_ADAPTER=patchcore`, Python 추론 서버 `python/serve.py` + 학습 `python/train.py`(사용법 `python/README.md`), 점수 0~1 변환·이상 맵 → 원본 픽셀 박스·투명 히트맵 PNG
+
+그 다음: 신규 배정 담당자 후보를 권한 코드 기준으로, 연구원 업로드 — 설계 9장. 실제 모델 어댑터 검토(Anomalib 후보, 라이선스 확인 먼저). 이후 계획(가입 승인·사용자/메뉴 관리·다국어)은 design.md 6장.
 
 새 세션 시작: `README.md 읽고 이어서 해줘` 한 줄이면 된다 (CLAUDE.md가 README → design.md 순서로 읽도록 안내함).
 
