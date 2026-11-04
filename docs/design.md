@@ -405,5 +405,10 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 - 담당자 목록(`GET /users`)은 사용 가능한 계정만 돌려준다.
 - 만료 해제 요청 접수(`expiry_release_requested_at`)와 승인·반려는 2단계에서 한다. 그 전까지 승인은 DB에서 직접.
 
-### 실제 모델 검토 (보류 중 메모)
-- 후보: Anomalib(Apache-2.0)의 PatchCore, EfficientAD. 정상 이미지로 학습하고 이상 점수·히트맵을 낸다. 이 프로젝트의 ComfyUI 정상 이미지(약 210장)로 학습하고 `ground_truth.jsonl`(결함 90장 박스)로 평가할 수 있다는 점이 잘 맞는다. 박스 출력은 확인하지 못해 히트맵에서 박스를 뽑는 후처리가 필요할 수 있다. CPU 추론 속도, 학습 데이터셋 라이선스(MVTec 등 사전학습·벤치마크 데이터)는 도입 전에 확인.
+### 실제 모델 검토 (2026-11-04, 검토 완료 · 구현은 결정 대기)
+- **후보**: Anomalib(코드 Apache-2.0)의 PatchCore 먼저(학습이 단순: 정상 이미지의 패치 특징을 메모리 뱅크에 저장, 이상 점수·이상 맵을 낸다). EfficientAD는 그 다음. MVTec AD는 CC BY-NC-SA라 쓰지 않는다.
+- **환경**: RTX 4060 Ti 16GB, Python 3.12 있음, torch·anomalib 미설치(설치 시 CUDA torch 수 GB). 백엔드는 Node(sharp)라 모델은 **별도 Python 프로세스**로 두고 Node 어댑터가 호출한다(ONNX 내보내기는 PatchCore의 메모리 뱅크 검색 때문에 번거로워 제외).
+- **데이터**: `data/images/real` 300장 = 정상 203 + 결함 97(`ground_truth.jsonl`에 박스). 정상 중 일부로 학습, 나머지 정상 + 결함으로 평가. 주의: 이 이미지는 장면·각도가 다양한 생성 이미지라 "같은 물건을 같은 자세로 찍은 공장 이미지"를 가정하는 PatchCore에 불리하다. 성능은 낮을 수 있고, 지금은 품질 판단이 목적이 아니라 **어댑터 연결이 목적**이다.
+- **계약과의 간극(결정 필요)**: ① 점수는 0~1이어야 하는데 PatchCore 원점수는 상한이 없다 → 정상 검증 이미지의 분포로 0~1 정규화하고, 정규화 기준을 모델 버전에 묶어 기록(판정 임계값은 계속 `rules`). ② 박스: 이상 맵을 임계로 잘라 연결 영역의 외접 박스를 만들고 **원본 픽셀**로 환산(후처리). ③ `reasonCode`: PatchCore는 원인을 구분하지 못한다 → (a) 모두 `TEXTURE_ANOMALY` 같은 고정값, (b) 계약에 `UNKNOWN` 추가 중 선택. ④ 히트맵 PNG는 Python이 만든다.
+- **연결 방식(제안)**: `backend/src/model/patchcore.mjs`(어댑터, `MODEL_ADAPTER=patchcore`)가 `python/` 아래의 추론 서버(상주, 모델 1회 로드)에 이미지 경로를 보내고 5장 JSON을 받는다. 어댑터는 기존처럼 `assertValidResult`로 검사. `modelVersion = patchcore-<백본>-<학습 데이터 해시>`.
+- **라이선스**: 백본 가중치(wide_resnet50_2, ImageNet 사전학습)의 상업 이용 조건은 미확인(데이터셋 ImageNet의 약관 확인 필요). 연습·비상업 범위에서는 문제 없고, 상업 전환 전에 확인한다. 회사 데이터는 학습·평가에 쓰지 않는다.
