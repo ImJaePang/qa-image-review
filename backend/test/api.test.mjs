@@ -57,7 +57,7 @@ describe('인증', () => {
   })
 })
 
-describe('배정 흐름 (생성 → 사전배치 → 점검 → 완료 → 확인)', () => {
+describe('배정 흐름 (생성 → 점검 → 완료 → 확인)', () => {
   let code
   let keys
 
@@ -113,17 +113,16 @@ describe('배정 흐름 (생성 → 사전배치 → 점검 → 완료 → 확�
     assert.equal(d.body.history.length, 1)
   })
 
-  test('단계를 건너뛸 수 없다 (409), 권한 없는 사람은 403', async () => {
-    assert.equal((await api('POST', `/api/assignments/${code}/status`, admin, { to: 'IN_REVIEW' })).status, 409)
-    assert.equal((await api('POST', `/api/assignments/${code}/status`, qa1, { to: 'PRECHECKED' })).status, 403)
+  test('단계를 건너뛸 수 없다 (409). 사전배치는 더 이상 없는 단계라 400', async () => {
+    assert.equal((await api('POST', `/api/assignments/${code}/status`, admin, { to: 'REVIEWED' })).status, 409)
+    assert.equal((await api('POST', `/api/assignments/${code}/status`, admin, { to: 'CONFIRMED' })).status, 409)
+    assert.equal((await api('POST', `/api/assignments/${code}/status`, admin, { to: 'PRECHECKED' })).status, 400)
   })
 
-  test('사전배치 후에는 batch_jobs 기록이 남는다', async () => {
-    const r = await api('POST', `/api/assignments/${code}/status`, admin, { to: 'PRECHECKED' })
-    assert.equal(r.status, 200)
-    const { pool } = await import('../src/db.mjs')
-    const jobs = await pool.query('SELECT status, total_count, processed_count, model_version FROM batch_jobs')
-    assert.deepEqual(jobs.rows, [{ status: 'SUCCEEDED', total_count: 6, processed_count: 6, model_version: 'test-v1' }])
+  test('목록의 상태별 건수에 사전배치 항목이 없다', async () => {
+    const list = await api('GET', '/api/assignments', admin)
+    assert.deepEqual(Object.keys(list.body.statusCounts), ['ASSIGNED', 'IN_REVIEW', 'REVIEWED', 'CONFIRMED'])
+    assert.equal((await api('GET', '/api/assignments?status=PRECHECKED', admin)).status, 400)
   })
 
   test('점검 전에는 검수할 수 없다 (409)', async () => {
@@ -209,7 +208,7 @@ describe('배정 흐름 (생성 → 사전배치 → 점검 → 완료 → 확�
     assert.equal((await api('POST', `/api/assignments/${code}/status`, admin, { to: 'CONFIRMED' })).status, 200)
     const d = await api('GET', `/api/assignments/${code}`, admin)
     assert.deepEqual(d.body.history.map((h) => h.action).filter((a) => !a.includes('저장') && !a.includes('배정')), [
-      '사전배치 실행', '점검 시작', '점검 완료', '확인 완료',
+      '점검 시작', '점검 완료', '확인 완료',
     ])
     assert.equal((await api('PUT', `/api/assignments/${code}/note`, qa1, { note: '수정' })).status, 409)
   })
@@ -217,6 +216,27 @@ describe('배정 흐름 (생성 → 사전배치 → 점검 → 완료 → 확�
   test('없는 배정은 404, 형식이 틀린 코드는 400', async () => {
     assert.equal((await api('GET', '/api/assignments/AS-9999', admin)).status, 404)
     assert.equal((await api('GET', '/api/assignments/xyz', admin)).status, 400)
+  })
+})
+
+describe('신규 배정은 수신·추론이 끝난(DONE) 이미지만 대상으로 한다', () => {
+  test('DONE이 아닌 이미지는 미배정 집계와 신규 배정에서 제외된다', async () => {
+    const { pool } = await import('../src/db.mjs')
+    // 남은 미배정 정상 이미지 6장을 처리 중/실패로 바꾼다 (판정 데이터가 남아 있어도 제외되어야 한다)
+    await pool.query("UPDATE images SET ingest_status = 'PROCESSING' WHERE image_key IN ('img_0001','img_0002','img_0003')")
+    await pool.query("UPDATE images SET ingest_status = 'FAILED' WHERE image_key IN ('img_0004','img_0005','img_0006')")
+    try {
+      const counts = (await api('GET', '/api/unassigned-counts', admin)).body
+      assert.equal(counts.NORMAL ?? 0, 0)
+      const r = await api('POST', '/api/assignments', admin, {
+        title: '수신 미완료', assigneeId: await qa1Id(), dueDate: '2026-12-31', verdicts: ['NORMAL'], count: 6,
+      })
+      assert.equal(r.status, 400)
+      assert.equal((await api('GET', '/api/assignments', admin)).body.total, 1) // 빈 배정이 만들어지지 않았다
+    } finally {
+      await pool.query("UPDATE images SET ingest_status = 'DONE' WHERE image_key IN ('img_0001','img_0002','img_0003','img_0004','img_0005','img_0006')")
+    }
+    assert.equal((await api('GET', '/api/unassigned-counts', admin)).body.NORMAL, 6)
   })
 })
 

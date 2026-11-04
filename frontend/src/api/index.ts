@@ -45,10 +45,11 @@ export interface TimeAnalysis {
     leadSeconds: number | null
   }[]
   models: { modelVersion: string; runs: number; avgMs: number; p95Ms: number; maxMs: number }[]
-  batches: {
-    assignmentId: string
-    modelVersion: string
-    status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+  /** 수신 배치(스캔 1회에 발견된 파일 묶음). 끝나지 않은 배치는 seconds가 null */
+  ingestBatches: {
+    id: string
+    integration: string
+    startedAt: string
     total: number
     processed: number
     failed: number

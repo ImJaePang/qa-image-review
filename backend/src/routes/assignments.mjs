@@ -2,13 +2,13 @@ import { pool, tx } from '../db.mjs'
 import { httpError } from '../errors.mjs'
 import { LATEST_RUN, latestVerdict } from '../sql.mjs'
 
-const STATUSES = ['ASSIGNED', 'PRECHECKED', 'IN_REVIEW', 'REVIEWED', 'CONFIRMED']
+const STATUSES = ['ASSIGNED', 'IN_REVIEW', 'REVIEWED', 'CONFIRMED']
 const VERDICTS = ['NORMAL', 'SUSPECT', 'DEFECT']
 
 // 현재 상태 → 다음 상태. who: admin = 관리자만, assignee = 담당자 또는 관리자
 const TRANSITIONS = {
-  ASSIGNED: { to: 'PRECHECKED', who: 'admin', action: '사전배치 실행' },
-  PRECHECKED: { to: 'IN_REVIEW', who: 'assignee', action: '점검 시작' },
+  // 이미지는 수신 시점에 이미 추론·판정되어 있어 배정 뒤 사전배치 단계가 없다 (db/migrations/002)
+  ASSIGNED: { to: 'IN_REVIEW', who: 'assignee', action: '점검 시작' },
   IN_REVIEW: { to: 'REVIEWED', who: 'assignee', action: '점검 완료' },
   REVIEWED: { to: 'CONFIRMED', who: 'admin', action: '확인 완료' },
 }
@@ -134,7 +134,8 @@ export default async function assignmentRoutes(app) {
     const { rows } = await pool.query(
       `SELECT v.result, count(*) AS n
        FROM images i ${LATEST_RUN} ${latestVerdict('lr.id')}
-       WHERE NOT EXISTS (SELECT 1 FROM assignment_images ai WHERE ai.image_id = i.id) AND v.result IS NOT NULL
+       WHERE i.ingest_status = 'DONE'
+         AND NOT EXISTS (SELECT 1 FROM assignment_images ai WHERE ai.image_id = i.id) AND v.result IS NOT NULL
        GROUP BY v.result`,
     )
     const counts = { NORMAL: 0, SUSPECT: 0, DEFECT: 0 }
@@ -192,7 +193,8 @@ export default async function assignmentRoutes(app) {
            FROM (
              SELECT i.id AS image_id, lr.id AS run_id, lr.overall_score
              FROM images i ${LATEST_RUN} ${latestVerdict('lr.id')}
-             WHERE NOT EXISTS (SELECT 1 FROM assignment_images ai WHERE ai.image_id = i.id)
+             WHERE i.ingest_status = 'DONE' -- 수신·추론이 끝난 이미지만 (대기·처리 중·실패는 제외)
+               AND NOT EXISTS (SELECT 1 FROM assignment_images ai WHERE ai.image_id = i.id)
                AND v.result = ANY($2::text[])
              ORDER BY i.id
              LIMIT $3
@@ -237,22 +239,6 @@ export default async function assignmentRoutes(app) {
             [a.id],
           )
           if (rows[0].n > 0) throw httpError(409, `검토하지 않은 이미지가 ${rows[0].n}장 남아 있습니다.`)
-        }
-
-        if (a.status === 'ASSIGNED') {
-          // 사전배치: 모델 결과는 이미 적재되어 있어 실제 추론은 하지 않고 실행 기록만 남긴다 (실제 모델 연동 시 교체).
-          const run = await db.query(
-            `SELECT mr.model_version, count(*) AS n
-             FROM assignment_images ai JOIN model_runs mr ON mr.id = ai.run_id
-             WHERE ai.assignment_id = $1 GROUP BY mr.model_version ORDER BY n DESC LIMIT 1`,
-            [a.id],
-          )
-          const total = (await db.query('SELECT count(*) AS n FROM assignment_images WHERE assignment_id = $1', [a.id])).rows[0].n
-          await db.query(
-            `INSERT INTO batch_jobs (assignment_id, model_version, status, total_count, processed_count, started_at, finished_at)
-             VALUES ($1, $2, 'SUCCEEDED', $3, $3, now(), now())`,
-            [a.id, run.rows[0]?.model_version ?? 'unknown', total],
-          )
         }
 
         await db.query('UPDATE assignments SET status = $2, updated_at = now() WHERE id = $1', [a.id, t.to])

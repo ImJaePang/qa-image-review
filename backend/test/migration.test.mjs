@@ -1,4 +1,4 @@
-// 마이그레이션 001 검증: 기존 데이터 보존, 새 제약, 수정일시 트리거, 재실행 안전성
+// 마이그레이션 001·002 검증: 기존 데이터 보존, 새 제약, 수정일시 트리거, 재실행 안전성
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import pg from 'pg'
@@ -27,7 +27,7 @@ const rejects = async (sql, params, pattern) => {
 test('이미 적용된 마이그레이션은 다시 실행되지 않는다', async () => {
   assert.deepEqual(await applyMigrations(db), [])
   const { rows } = await db.query('SELECT name FROM schema_migrations ORDER BY name')
-  assert.deepEqual(rows.map((r) => r.name), ['001_ingest_foundation.sql'])
+  assert.deepEqual(rows.map((r) => r.name), ['001_ingest_foundation.sql', '002_remove_prechecked.sql'])
 })
 
 test('기존 이미지는 수신 완료(DONE)이고 원래 파일명이 보존된다', async () => {
@@ -93,4 +93,25 @@ test('integrations / ingest_batches: 종류·중복 이름 제약과 배치 연�
   assert.ok(batch.started_at)
   await db.query(`UPDATE images SET batch_id = $1 WHERE image_key = 'mig_1'`, [batch.id])
   await rejects(`INSERT INTO ingest_batches (integration_id, failed_count) VALUES ($1, -1)`, [integ.id], /check/)
+})
+
+test('002: 사전배치(PRECHECKED)에 멈춰 있던 배정은 배정(ASSIGNED)으로 되돌리고, 이후 PRECHECKED는 거부된다', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const { MIGRATIONS_DIR } = await import('../src/migrate.mjs')
+  // 002 적용 전 상태를 흉내 낸다: 제약을 풀고 옛 상태의 행을 넣은 뒤 002 SQL을 다시 실행
+  await db.query('BEGIN')
+  try {
+    await db.query('ALTER TABLE assignments DROP CONSTRAINT assignments_status_check')
+    await db.query("INSERT INTO assignments (title, assignee_id, created_by, due_date, status) VALUES ('옛 사전배치', 2, 1, '2026-12-31', 'PRECHECKED')")
+    await db.query(readFileSync(join(MIGRATIONS_DIR, '002_remove_prechecked.sql'), 'utf8'))
+    const { rows } = await db.query("SELECT status FROM assignments WHERE title = '옛 사전배치'")
+    assert.equal(rows[0].status, 'ASSIGNED')
+    await db.query('COMMIT')
+  } catch (err) {
+    await db.query('ROLLBACK')
+    throw err
+  }
+  await rejects("INSERT INTO assignments (title, assignee_id, created_by, due_date, status) VALUES ('x', 2, 1, '2026-12-31', 'PRECHECKED')", [], /assignments_status_check/)
+  await db.query("DELETE FROM assignments WHERE title = '옛 사전배치'")
 })

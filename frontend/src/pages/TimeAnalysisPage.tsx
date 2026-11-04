@@ -106,15 +106,15 @@ export function TimeAnalysisPage() {
             <Stat label="제외된 자리 비움 구간" value={`${idle}회`} hint={`${gap}분 넘게 벌어진 간격`} />
             <Stat label="모델 처리 시간(장당)" value={fmtMs(modelAvg)} hint={`${modelRuns.toLocaleString()}회 평균`} />
             <Stat
-              label="사전배치 처리 시간(장당)"
+              label="수신 처리 시간(장당)"
               value={fmtDuration(
                 (() => {
-                  const done = data.batches.filter((b) => b.secondsPerImage !== null)
+                  const done = data.ingestBatches.filter((b) => b.secondsPerImage !== null)
                   const n = done.reduce((s, b) => s + b.processed, 0)
                   return n ? done.reduce((s, b) => s + (b.secondsPerImage ?? 0) * b.processed, 0) / n : null
                 })(),
               )}
-              hint="완료된 배치 가중 평균"
+              hint="완료된 수신 배치 가중 평균 (추론+사본 생성)"
             />
           </div>
 
@@ -219,11 +219,11 @@ export function TimeAnalysisPage() {
               </Table>
             </Section>
 
-            <Section title="사전배치 실행" desc="최근 50건 (batch_jobs). 실제 추론 연동 전에는 기록만 남습니다.">
+            <Section title="수신 배치" desc="폴더 스캔 1회에 발견된 파일 묶음, 최근 50건 (ingest_batches).">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>배정</TableHead>
+                    <TableHead>연계</TableHead>
                     <TableHead>결과</TableHead>
                     <TableHead className="text-right">처리 / 전체</TableHead>
                     <TableHead className="text-right">소요</TableHead>
@@ -231,11 +231,11 @@ export function TimeAnalysisPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.batches.length === 0 && <Empty cols={5} />}
-                  {data.batches.map((b, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-mono text-xs">{b.assignmentId}</TableCell>
-                      <TableCell className="text-xs">{b.status === 'SUCCEEDED' ? '성공' : b.status === 'FAILED' ? '실패' : '진행'}</TableCell>
+                  {data.ingestBatches.length === 0 && <Empty cols={5} />}
+                  {data.ingestBatches.map((b) => (
+                    <TableRow key={b.id}>
+                      <TableCell className="text-xs">{b.integration}</TableCell>
+                      <TableCell className="text-xs">{b.seconds === null ? '진행' : b.failed > 0 ? '일부 실패' : '성공'}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {b.processed}/{b.total}
                         {b.failed > 0 && <span className="text-destructive"> (실패 {b.failed})</span>}

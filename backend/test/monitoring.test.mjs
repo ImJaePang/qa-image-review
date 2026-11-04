@@ -33,7 +33,7 @@ describe('접근 제어와 입력 검증', () => {
   test('검수 기록이 없으면 빈 목록과 기본값(5분)', async () => {
     const r = (await get('/api/monitoring/time', admin)).body
     assert.equal(r.gapMinutes, 5)
-    assert.deepEqual([r.reviewers, r.assignments, r.batches], [[], [], []])
+    assert.deepEqual([r.reviewers, r.assignments, r.ingestBatches], [[], [], []])
   })
 })
 
@@ -59,8 +59,7 @@ describe('계산 결과 (시각을 직접 넣은 시나리오)', () => {
     const hist = (from, to, at) =>
       pool.query(`INSERT INTO assignment_history (assignment_id, from_status, to_status, action, actor_id, at) VALUES ($1, $2, $3, 'x', 1, $4)`, [aid, from, to, at])
     await hist(null, 'ASSIGNED', '2026-01-01 09:00:00+00')
-    await hist('ASSIGNED', 'PRECHECKED', '2026-01-01 09:30:00+00')
-    await hist('PRECHECKED', 'IN_REVIEW', '2026-01-01 10:00:00+00')
+    await hist('ASSIGNED', 'IN_REVIEW', '2026-01-01 10:00:00+00')
     await hist('IN_REVIEW', 'REVIEWED', '2026-01-01 10:15:00+00')
     await hist('REVIEWED', 'CONFIRMED', '2026-01-01 11:00:00+00')
 
@@ -80,16 +79,17 @@ describe('계산 결과 (시각을 직접 넣은 시나리오)', () => {
     await pool.query(`UPDATE model_runs SET duration_ms = 100`)
     for (const [ms, id] of [[200, 1], [300, 2], [1000, 3]]) await pool.query(`UPDATE model_runs SET duration_ms = $1 WHERE id = $2`, [ms, id])
 
-    // 사전배치: 5장을 10초에 처리, 그리고 끝나지 않은 실패 건
+    // 수신 배치: 5장을 10초에 처리(1장 실패), 그리고 아직 끝나지 않은 배치
+    const integ = (await pool.query("INSERT INTO integrations (kind, name, config) VALUES ('FOLDER', '테스트 폴더', '{}') RETURNING id")).rows[0].id
     await pool.query(
-      `INSERT INTO batch_jobs (assignment_id, model_version, status, total_count, processed_count, started_at, finished_at)
-       VALUES ($1, 'test-v1', 'SUCCEEDED', 5, 5, '2026-01-01 09:20:00+00', '2026-01-01 09:20:10+00')`,
-      [aid],
+      `INSERT INTO ingest_batches (integration_id, total_count, processed_count, failed_count, started_at, finished_at)
+       VALUES ($1, 5, 5, 1, '2026-01-01 09:20:00+00', '2026-01-01 09:20:10+00')`,
+      [integ],
     )
     await pool.query(
-      `INSERT INTO batch_jobs (assignment_id, model_version, status, total_count, processed_count, failed_count, started_at)
-       VALUES ($1, 'test-v1', 'FAILED', 5, 0, 5, '2026-01-01 09:10:00+00')`,
-      [aid],
+      `INSERT INTO ingest_batches (integration_id, total_count, processed_count, failed_count, started_at)
+       VALUES ($1, 5, 2, 0, '2026-01-01 09:10:00+00')`,
+      [integ],
     )
   })
 
@@ -156,14 +156,15 @@ describe('계산 결과 (시각을 직접 넣은 시나리오)', () => {
     assert.equal(m.maxMs, 1000)
   })
 
-  test('사전배치: 장당 초, 끝나지 않은 건은 null', async () => {
-    const b = (await get('/api/monitoring/time', admin)).body.batches
-    const ok = b.find((x) => x.status === 'SUCCEEDED')
-    assert.equal(ok.seconds, 10)
-    assert.equal(ok.secondsPerImage, 2)
-    const failed = b.find((x) => x.status === 'FAILED')
-    assert.equal(failed.seconds, null)
-    assert.equal(failed.secondsPerImage, null)
-    assert.equal(failed.failed, 5)
+  test('수신 배치: 장당 초, 끝나지 않은 건은 null. 사전배치 항목은 더 이상 없다', async () => {
+    const body = (await get('/api/monitoring/time', admin)).body
+    assert.equal(body.batches, undefined)
+    const b = body.ingestBatches
+    assert.equal(b.length, 2)
+    const ok = b.find((x) => x.seconds !== null)
+    assert.deepEqual([ok.integration, ok.total, ok.processed, ok.failed, ok.seconds, ok.secondsPerImage], ['테스트 폴더', 5, 5, 1, 10, 2])
+    const running = b.find((x) => x.seconds === null)
+    assert.equal(running.secondsPerImage, null)
+    assert.equal(running.processed, 2)
   })
 })

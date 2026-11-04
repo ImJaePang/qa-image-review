@@ -53,8 +53,9 @@ export interface ImageItem extends ImageResult {
   review: ImageReview
 }
 
-export type AssignmentStatus = '배정' | '사전배치' | '점검중' | '점검완료' | '확인완료'
-export const ASSIGNMENT_STATUSES: AssignmentStatus[] = ['배정', '사전배치', '점검중', '점검완료', '확인완료']
+// 사전배치 단계는 없다: 이미지는 수신 시점에 이미 추론·판정되어 있다 (db/migrations/002)
+export type AssignmentStatus = '배정' | '점검중' | '점검완료' | '확인완료'
+export const ASSIGNMENT_STATUSES: AssignmentStatus[] = ['배정', '점검중', '점검완료', '확인완료']
 
 export interface HistoryEntry {
   at: string

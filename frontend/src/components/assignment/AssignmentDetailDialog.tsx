@@ -110,8 +110,6 @@ function Body({ a }: { a: Assignment }) {
   const next = (() => {
     switch (a.status) {
       case '배정':
-        return isAdmin ? { label: '사전배치 실행 (AI 사전 검증)', status: '사전배치' as const } : null
-      case '사전배치':
         return isAssignee || isAdmin ? { label: '점검 시작', status: '점검중' as const } : null
       case '점검중':
         return isAssignee || isAdmin ? { label: '점검 완료', status: '점검완료' as const } : null

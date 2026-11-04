@@ -65,7 +65,7 @@ export function AssignmentListPage() {
       </div>
 
       {/* 상태별 요약 */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {ASSIGNMENT_STATUSES.map((s) => (
           <button
             key={s}

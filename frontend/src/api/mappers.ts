@@ -10,7 +10,6 @@ import type {
 
 export const STATUS_KO = {
   ASSIGNED: '배정',
-  PRECHECKED: '사전배치',
   IN_REVIEW: '점검중',
   REVIEWED: '점검완료',
   CONFIRMED: '확인완료',

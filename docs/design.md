@@ -30,12 +30,11 @@ Vite 8 + React 19 + TypeScript(7) + Tailwind v4 + shadcn/ui(Base UI 기반) + Re
   - 모달 vs 탭은 모달 안 탭으로 결정. 수천 장 연속 검수 시에는 전용 페이지(`/review/assignments/:id`)로 옮기는 안을 보류 중 (컴포넌트 그대로 이동 가능).
 
 ### 상태 흐름과 권한
-배정 → 사전배치 → 점검중 → 점검완료 → 확인완료
+배정 → 점검중 → 점검완료 → 확인완료 (사전배치 단계는 마이그레이션 002에서 제거, 8장 참고)
 
 | 현재 상태 | 다음 단계 버튼 | 가능한 사람 |
 |---|---|---|
-| 배정 | 사전배치 실행 | 관리자 |
-| 사전배치 | 점검 시작 | 담당자, 관리자 |
+| 배정 | 점검 시작 | 담당자, 관리자 |
 | 점검중 | 점검 완료 (미검토 이미지가 남으면 거부) | 담당자, 관리자 |
 | 점검완료 | 확인 완료 | 관리자 |
 
@@ -80,12 +79,12 @@ Vite 8 + React 19 + TypeScript(7) + Tailwind v4 + shadcn/ui(Base UI 기반) + Re
 | `assignment_images` | 배정↔이미지 소속 + 배정 시점의 AI 결과(`run_id`) + 정렬 순서 |
 | `assignment_history` | 상태 변경/처리 이력(from/to, 행위자, 시각). 단계별 소요 시간의 원천 |
 | `reviews` | 검수 결과. **쌓기만 하는 기록**(번복 시 행 추가), 최신 행이 현재 상태 |
-| `batch_jobs` | 사전배치(AI 사전 검증) 실행 기록. 시작/종료, 처리 수, 실패 수, 에러 |
+| `batch_jobs` | (폐기) 사전배치 실행 기록. 002 이후 기록하지 않고 과거 기록만 보존. 수신 배치는 `ingest_batches` |
 
 뷰: `review_current`(이미지별 최신 검수 상태), `assignment_summary`(배정 리스트용 장수·판정 분포·검수 진행).
 
 ### 값 코드 (영문 저장, 한글은 화면에서 매핑)
-- 배정 상태: `ASSIGNED`(배정) `PRECHECKED`(사전배치) `IN_REVIEW`(점검중) `REVIEWED`(점검완료) `CONFIRMED`(확인완료)
+- 배정 상태: `ASSIGNED`(배정) `IN_REVIEW`(점검중) `REVIEWED`(점검완료) `CONFIRMED`(확인완료)
 - 판정: `NORMAL`(정상) `SUSPECT`(의심) `DEFECT`(불량)
 - 검수: `APPROVED`(승인) `REJECTED`(반려) — 행이 없으면 미검토
 - 사유 코드: 기획서 4장 6종 그대로 (`COMPOSITE_EDGE` 등)
@@ -96,7 +95,7 @@ Vite 8 + React 19 + TypeScript(7) + Tailwind v4 + shadcn/ui(Base UI 기반) + Re
 - **소요 시간은 서버가 저장한 시각으로 계산** (클라이언트 측정값 불신, 자리를 비운 시간이 섞이는 문제 때문):
   - 배정 단위 평균 = (점검중→점검완료 시각, `assignment_history`) ÷ 검수한 이미지 수.
   - 이미지별 작업 속도 = 같은 담당자의 연속된 `reviews.decided_at` 간격. 약 5분 이상 벌어진 구간은 자리를 비운 것으로 보고 제외(기준은 쿼리에서 조정).
-  - 사전배치 시간 = `batch_jobs`, 모델 1장 시간 = `model_runs.duration_ms`.
+  - 수신 배치 시간 = `ingest_batches`, 모델 1장 시간 = `model_runs.duration_ms`.
 - **인덱스**: `assignment_images(assignment_id, position)`, `reviews(assignment_id, image_id, decided_at DESC)`, `detections(run_id)` 등 3천 장 집계를 염두에 둠.
 
 ## 3-1. 백엔드 API (`backend/src`)
@@ -116,11 +115,11 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 | PUT /api/assignments/:code/note | 점검 내용 저장 | 담당자·관리자 |
 | GET /api/assignments/:code/images?filter&verdict&page&pageSize | 서버 페이지네이션(최대 200). filter: all/unreviewed/approved/rejected | 로그인 |
 | PUT /api/assignments/:code/images/:imageKey/review | 승인/반려 저장. 점검중일 때만 | 담당자·관리자 |
-| GET /api/monitoring/time?gapMinutes=5 | 소요 시간 분석(담당자별·배정별·모델·사전배치). 자리 비움 기준 1~120분 | 관리자 |
+| GET /api/monitoring/time?gapMinutes=5 | 소요 시간 분석(담당자별·배정별·모델·수신 배치). 자리 비움 기준 1~120분 | 관리자 |
 | GET /api/images/:imageKey/thumb|preview|original|heatmap | 이미지·히트맵 파일(이미지 ID 기반, 경로 비노출). 관리자 전부, QA는 자기 배정 이미지만, `ingest_status=DONE`만. `Cache-Control: private` + ETag(304), nosniff, SVG는 CSP sandbox | 로그인 |
 
-- 단계별 권한은 2장 표와 같다 (사전배치 실행·확인 완료는 관리자, 점검 시작·완료는 담당자 또는 관리자).
-- 사전배치는 지금은 실제 추론 없이 `batch_jobs`에 성공 기록만 남긴다 (모델 결과는 이미 적재됨). 실제 모델 연동 시 이 부분을 어댑터로 교체.
+- 단계별 권한은 2장 표와 같다 (확인 완료는 관리자, 점검 시작·완료는 담당자 또는 관리자).
+- 사전배치 단계는 없다. 이미지는 수신 시점에 추론·판정되고(`npm run worker`), 신규 배정은 `ingest_status=DONE`인 이미지만 담는다. 모델 연동 지점은 어댑터(`src/model/`).
 - 검수 저장은 직전과 같은 내용이면 행을 추가하지 않는다 (소요 시간 분석 노이즈 방지). 판정을 바꾸면 행 추가.
 - 신규 배정은 `pg_advisory_xact_lock`으로 직렬화해 두 배정이 같은 이미지를 집지 않게 한다.
 - 이미지 항목: 5장 계약 필드 + `verdict`, `reasons`, `thumbUrl/previewUrl/heatmapUrl`, `review{status: NONE|APPROVED|REJECTED}`. 썸네일 생성 전에는 원본 URL을 그대로 돌려준다.
@@ -133,7 +132,7 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 - **담당자별 이미지당 시간**: 같은 담당자·같은 배정에서 연속된 `reviews.decided_at` 간격. 기준(기본 5분) 초과 간격은 자리 비움으로 보고 평균/실작업 시간에서 제외하고 "자리 비움 구간" 수로 따로 센다. 다른 담당자의 검수가 사이에 끼어도 서로의 간격에 영향이 없다(담당자·배정 단위로 계산).
 - **번복**: 같은 이미지를 다시 판정한 행도 하나의 작업 간격으로 계산하고, 건수는 `번복 = 판정 횟수 - 이미지 수`로 따로 보여 준다.
 - **배정별**: (점검 시작 ~ 점검 완료 시각, `assignment_history`) ÷ 검수한 이미지 수 = 평균/장. 실작업/장은 자리 비움을 뺀 값. 배정~확인은 ASSIGNED ~ CONFIRMED. 아직 끝나지 않은 단계는 null.
-- **모델**: `model_runs.duration_ms`의 평균/p95/최대(버전별). **사전배치**: `batch_jobs` 시작·종료 시각, 끝나지 않은 건은 null.
+- **모델**: `model_runs.duration_ms`의 평균/p95/최대(버전별). **수신 배치**: `ingest_batches` 시작·종료 시각, 끝나지 않은 건은 null (과거 `batch_jobs`는 더 이상 쓰지 않음).
 - 첫 검수는 직전 기준이 없어 간격에 포함되지 않는다. 점검 시작 직후 첫 이미지를 보는 시간은 배정별 평균(점검 시작 기준)에만 반영된다.
 - 한계: 한 번에 많은 이미지를 승인하는 일괄 처리가 생기면 간격이 매우 짧게 잡힌다. 현재 화면에는 일괄 처리가 없다.
 
@@ -312,3 +311,11 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 - **키보드 버그**: 토글 버튼을 클릭하면 버튼이 포커스를 가져가 `←/→`를 토글 그룹이 먹어 이미지 이동이 안 되고 모드가 바뀌었다 → 토글 변경 뒤 포커스를 풀어 해결(오버레이 토글 포함). 실제 화면 조작으로 발견.
 - **개발 환경**: 이 PC는 윈도우가 포트 3000을 예약(Docker Desktop 기동 뒤 `EACCES`)해 `API_PORT=3101`로 실행한다. `vite.config.ts` 프록시가 `API_PORT`를 따르도록 변경.
 - 화면 확인은 Playwright(임시 폴더에 설치, 프로젝트 의존성 아님) + 시스템 Edge로 했다. 자동 화면 테스트는 아직 없다.
+
+### ⑥ 구현 메모 (2026-11-04)
+- **마이그레이션 `002_remove_prechecked.sql`**: PRECHECKED에 있던 배정은 ASSIGNED로 되돌리고(기록만 남기던 단계라 잃는 정보 없음), `assignments_status_check`에서 PRECHECKED를 뺐다. `assignment_history`의 과거 PRECHECKED 기록은 그때 있었던 사실이라 그대로 두고, `batch_jobs` 테이블은 지우지 않고 폐기 표시(COMMENT)만 했다.
+- 상태 전이: `ASSIGNED → IN_REVIEW`(점검 시작, 담당자·관리자). `to: 'PRECHECKED'` 요청은 스키마 검증에서 400. 목록 상태별 건수·필터도 4단계.
+- **신규 배정 조건**: `i.ingest_status = 'DONE'`을 `POST /assignments`와 `/unassigned-counts` 쿼리에 명시(대기·처리 중·실패 이미지는 판정 데이터가 있어도 제외). 테스트: 비-DONE만 남았을 때 집계 0, 배정 400, 빈 배정이 생기지 않음.
+- **소요 시간 화면**: "사전배치 처리 시간/실행" → "수신 처리 시간(장당)"/"수신 배치"(`ingest_batches`: 연계 이름, 처리/전체, 실패, 소요, 장당). 응답 필드 `batches` → `ingestBatches`.
+- 프론트: 단계 표시·요약 카드 5칸 → 4칸, 상태 뱃지, `mappers.ts`, 배정 상세의 다음 단계 버튼(배정 상태에서 바로 '점검 시작'). 화면을 직접 열어 확인했다(목록, 배정 상세, 소요 시간).
+- CLAUDE.md의 소요 시간 계산 근거에서 `batch_jobs`를 `ingest_batches`로 바꿨다.

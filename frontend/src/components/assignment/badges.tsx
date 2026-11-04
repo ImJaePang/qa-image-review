@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils'
 
 const STATUS_STYLE: Record<AssignmentStatus, string> = {
   배정: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
-  사전배치: 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200',
   점검중: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
   점검완료: 'bg-lime-100 text-lime-800 dark:bg-lime-900/50 dark:text-lime-200',
   확인완료: 'bg-primary text-primary-foreground',

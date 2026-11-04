@@ -2,7 +2,7 @@
 //  - 이미지별 작업 속도: 같은 담당자·같은 배정에서 연속된 검수(reviews.decided_at) 사이의 간격.
 //    gapMinutes보다 길게 벌어진 구간은 자리를 비운 것으로 보고 평균에서 제외한다.
 //  - 배정 단위: 점검 시작(IN_REVIEW) ~ 점검 완료(REVIEWED) 시각 차이(assignment_history) ÷ 검수한 이미지 수.
-//  - 모델: model_runs.duration_ms, 사전배치: batch_jobs 시작/종료 시각.
+//  - 모델: model_runs.duration_ms, 수신 배치: ingest_batches 시작/종료 시각. (과거 batch_jobs=사전배치 기록은 더 이상 쓰지 않는다)
 import { pool } from '../db.mjs'
 import { httpError } from '../errors.mjs'
 import { isAdmin } from './assignments.mjs'
@@ -86,9 +86,9 @@ export default async function monitoringRoutes(app) {
            FROM model_runs WHERE duration_ms IS NOT NULL GROUP BY model_version ORDER BY model_version`,
         ),
         pool.query(
-          `SELECT a.code, b.model_version, b.status, b.total_count, b.processed_count, b.failed_count,
+          `SELECT b.id, i.name AS integration, b.total_count, b.processed_count, b.failed_count, b.started_at,
                   extract(epoch FROM b.finished_at - b.started_at) AS seconds
-           FROM batch_jobs b JOIN assignments a ON a.id = b.assignment_id
+           FROM ingest_batches b JOIN integrations i ON i.id = b.integration_id
            ORDER BY b.id DESC LIMIT 50`,
         ),
       ])
@@ -127,10 +127,11 @@ export default async function monitoringRoutes(app) {
           p95Ms: round(r.p95_ms),
           maxMs: r.max_ms,
         })),
-        batches: batches.rows.map((r) => ({
-          assignmentId: r.code,
-          modelVersion: r.model_version,
-          status: r.status,
+        // 수신 배치(스캔 1회에 발견된 파일 묶음): 끝나지 않은 배치는 seconds가 null
+        ingestBatches: batches.rows.map((r) => ({
+          id: String(r.id),
+          integration: r.integration,
+          startedAt: r.started_at,
           total: r.total_count,
           processed: r.processed_count,
           failed: r.failed_count,

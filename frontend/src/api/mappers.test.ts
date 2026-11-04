@@ -4,8 +4,8 @@ import { REVIEW_CODE, REVIEW_KO, STATUS_CODE, STATUS_KO, VERDICT_CODE, VERDICT_K
 
 // 서버(DB 체크 제약)가 쓰는 코드와 화면 한글 값이 어긋나면 여기서 먼저 깨진다.
 describe('영문 코드 ↔ 한글 매핑', () => {
-  test('배정 상태: 왕복 변환이 일치하고 화면 순서(ASSIGNMENT_STATUSES)와 같은 5단계', () => {
-    expect(Object.keys(STATUS_KO)).toEqual(['ASSIGNED', 'PRECHECKED', 'IN_REVIEW', 'REVIEWED', 'CONFIRMED'])
+  test('배정 상태: 왕복 변환이 일치하고 화면 순서(ASSIGNMENT_STATUSES)와 같은 4단계', () => {
+    expect(Object.keys(STATUS_KO)).toEqual(['ASSIGNED', 'IN_REVIEW', 'REVIEWED', 'CONFIRMED'])
     expect(Object.values(STATUS_KO)).toEqual(ASSIGNMENT_STATUSES)
     for (const [code, ko] of Object.entries(STATUS_KO)) expect(STATUS_CODE[ko]).toBe(code)
   })
