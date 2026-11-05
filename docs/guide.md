@@ -220,7 +220,7 @@ cd python && .venv/Scripts/python -m unittest test_metrics test_postprocess   # 
 ```
 
 - 백엔드 테스트는 DB 컨테이너가 떠 있어야 하고, 전용 DB `qa_review_test`를 매번 새로 만든다. 개발 DB(`qa_review`)는 건드리지 않는다.
-- 화면(브라우저) 자동 테스트는 아직 없다. 화면은 직접 확인했다.
+- 화면(브라우저) 자동 테스트는 폼 5곳만 있다(`npm run test:e2e`, Playwright). 나머지 화면은 직접 확인했다.
 
 ## 9. 문제 해결
 
@@ -244,4 +244,4 @@ cd python && .venv/Scripts/python -m unittest test_metrics test_postprocess   # 
 
 README의 "다음에 이어서 할 일"이 최신이다. 요약:
 - 실제 모델(PatchCore)은 연결·평가까지 끝났다. 다만 이 데이터에서는 성능이 낮다(AUROC 0.683) — 개선·다른 모델 비교는 필요할 때(design.md 9장 마지막). 다국어(design.md 6장), 임시 비밀번호 이메일 발송은 아직.
-- 알려진 한계: 화면 자동 테스트 없음, 로그인 잠금은 15분 뒤 자동 해제만 가능(관리자 수동 해제 없음, 프록시 뒤에서는 `trustProxy` 필요), 목 모델의 박스·점수는 가짜라 `ground_truth.jsonl`과 무관하다(실제 모델은 `python/evaluate.py`로 정답과 비교).
+- 알려진 한계: 화면 자동 테스트는 폼 5곳뿐, 로그인 잠금은 15분 뒤 자동 해제만 가능(관리자 수동 해제 없음, 프록시 뒤에서는 `trustProxy` 필요), 목 모델의 박스·점수는 가짜라 `ground_truth.jsonl`과 무관하다(실제 모델은 `python/evaluate.py`로 정답과 비교).

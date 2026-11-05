@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -47,14 +47,16 @@ export function UserEditDialog({ userId, onClose }: { userId: string | null; onC
   const [tempPw, setTempPw] = useState<string | null>(null)
 
   // 처음 불러왔을 때만 폼을 채운다 (저장 후 다시 불러와도 입력 중인 값을 덮지 않도록 사용자 id 기준)
-  useEffect(() => {
-    if (!user) return
+  const [filledKey, setFilledKey] = useState('')
+  const userKey = user ? `${user.id}:${user.status}` : ''
+  if (user && filledKey !== userKey) {
+    setFilledKey(userKey)
     setName(user.name)
     setRole(user.status === 'PENDING' ? (user.requestedRole ?? 'qa') : user.role)
     setExpires(user.expiresAt ? fmtDate(user.expiresAt) : '')
     setProfile(user.profile)
     setTempPw(null)
-  }, [user?.id, user?.status]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['admin-users'] })

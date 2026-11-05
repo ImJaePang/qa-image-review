@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -31,23 +31,25 @@ export function RoleEditDialog({ target, onClose }: { target: RoleDialogTarget |
   const [sortOrder, setSortOrder] = useState('')
 
   // 열 때(신규) 또는 처음 불러왔을 때(수정)만 폼을 채운다
-  useEffect(() => {
-    if (!target) return
-    if (target.mode === 'new') {
+  const [openedFor, setOpenedFor] = useState<RoleDialogTarget | null>(null)
+  if (target !== openedFor) {
+    setOpenedFor(target)
+    if (target?.mode === 'new') {
       setNewCode('')
       setLabel('')
       setDescription('')
       setSignup(false)
       setSortOrder('')
     }
-  }, [target])
-  useEffect(() => {
-    if (!role) return
+  }
+  const [filledRole, setFilledRole] = useState('')
+  if (role && filledRole !== role.code) {
+    setFilledRole(role.code)
     setLabel(role.label)
     setDescription(role.description ?? '')
     setSignup(role.signupSelectable)
     setSortOrder(String(role.sortOrder))
-  }, [role?.code]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['admin-roles'] })

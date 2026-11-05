@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, Lock } from 'lucide-react'
 import { toast } from 'sonner'
@@ -21,9 +21,12 @@ export function MenusPage() {
   const { data: history = [] } = useQuery({ queryKey: ['permissions', 'history'], queryFn: api.permissionHistory, enabled: allowed })
   const [draft, setDraft] = useState<Grants>({})
   const [picked, setPicked] = useState<Set<string>>(new Set()) // 열 필터: 아무것도 안 고르면 전체 권한
-  useEffect(() => {
-    if (table) setDraft(toSets(table.granted))
-  }, [table])
+  // 서버에서 표를 새로 받을 때마다 편집본을 서버 값으로 다시 채운다 (렌더 중에 한 번만 맞춘다)
+  const [syncedTable, setSyncedTable] = useState(table)
+  if (table && table !== syncedTable) {
+    setSyncedTable(table)
+    setDraft(toSets(table.granted))
+  }
 
   const original = useMemo(() => (table ? toSets(table.granted) : {}), [table])
   const labels = useMemo(() => {

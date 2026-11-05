@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -60,12 +60,13 @@ export function RulesPage() {
   const [suspectStr, setSuspectStr] = useState('')
   const [scope, setScope] = useState<'unassigned' | 'all'>('unassigned')
   const activeKey = active ? `${active.id}:${active.params.normalMin}:${active.params.suspectMin}` : ''
-  useEffect(() => {
-    if (!active) return
+  // 활성 규칙이 바뀔 때만 다시 채운다
+  const [filledKey, setFilledKey] = useState('')
+  if (active && filledKey !== activeKey) {
+    setFilledKey(activeKey)
     setNormalStr(String(active.params.normalMin))
     setSuspectStr(String(active.params.suspectMin))
-    // 활성 규칙이 바뀔 때만 다시 채운다
-  }, [activeKey])
+  }
 
   const normal = parseThreshold(normalStr)
   const suspect = parseThreshold(suspectStr)

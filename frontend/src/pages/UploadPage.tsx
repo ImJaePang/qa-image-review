@@ -26,7 +26,7 @@ export function UploadPage() {
   const dirInput = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
   const [memo, setMemo] = useState('')
-  const [now, setNow] = useState(Date.now())
+  const [now, setNow] = useState(() => Date.now())
   const [mine, setMine] = useState(false)
   const [q, setQ] = useState('')
   const [debouncedQ, setDebouncedQ] = useState('')

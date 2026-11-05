@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -55,9 +55,12 @@ export function IntegrationFormDialog({
     failedDir: `${suggestBase}/${defaults.failedDir}`,
   })
   const [form, setForm] = useState<Form>(() => toForm('', suggested()))
-  useEffect(() => {
+  // 열릴 때(또는 대상·기본값이 바뀔 때) 폼을 다시 채운다
+  const [prev, setPrev] = useState({ open: false, integration, defaults, suggestBase })
+  if (prev.open !== open || prev.integration !== integration || prev.defaults !== defaults || prev.suggestBase !== suggestBase) {
+    setPrev({ open, integration, defaults, suggestBase })
     if (open) setForm(integration ? toForm(integration.name, integration.config) : toForm('', suggested()))
-  }, [open, integration, defaults, suggestBase])
+  }
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   const { data: history = [] } = useQuery({

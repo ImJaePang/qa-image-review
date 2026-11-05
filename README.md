@@ -66,9 +66,9 @@ npm run dev
 
 ### 점검 메모 (2026-11-04)
 전체 점검 결과: 백엔드 테스트 208개·프론트 50개·파이썬 17개 모두 통과, `tsc -b`·`vite build` 성공. 정리할 작은 항목:
-- 프론트 린트(`npm run lint`, oxlint) 경고 13개, 오류 0. 대부분 모달을 열 때 `useEffect`에서 폼 상태를 채우는 패턴(`set-state-in-effect`: RoleEditDialog, UserEditDialog, IntegrationFormDialog, RulesPage, MenusPage). `RulesPage`의 `exhaustive-deps` 경고는 `activeKey`로 의도적으로 묶은 것이라 동작 문제는 없음. 고친다면 모달에 `key`를 주어 다시 마운트하는 방식으로.
+- 프론트 린트(`npm run lint`, oxlint): 경고 0 (2026-11-05 정리, 바뀐 5곳은 Playwright 화면 테스트로 확인). 모달·폼을 불러온 값으로 채우던 `useEffect`+`setState`를 "렌더 중에 키가 바뀐 때만 한 번 채우기"로 바꿨고(UserEditDialog, RoleEditDialog, IntegrationFormDialog, RulesPage, MenusPage), shadcn 생성 폴더 `components/ui`는 `only-export-components` 규칙을 껐다. 브라우저 동작 확인은 아직 안 함.
 - 번들이 한 덩어리(약 770KB). 필요하면 페이지별 `React.lazy`로 나누기.
-- 화면(브라우저) 자동 테스트 없음.
+- 화면 자동 테스트는 폼 5곳만 있음(Playwright). 로그인·검수 흐름 같은 핵심 시나리오는 아직 없다.
 
 새 세션 시작: `README.md 읽고 이어서 해줘` 한 줄이면 된다 (CLAUDE.md가 README → design.md 순서로 읽도록 안내함).
 
@@ -109,8 +109,9 @@ cd backend && npm test      # 백엔드 테스트 218개 (API 통합, 사용자�
 cd frontend && npm test     # 단위 테스트 50개 (영문 코드↔한글 매핑, 페이징, 사용자·권한 문구, 업로드 전송 큐 등)
 cd frontend && npx tsc -b   # 타입 체크
 cd python && .venv/Scripts/python -m unittest test_metrics test_postprocess   # 파이썬 단위 테스트 17개 (모델 없이 실행)
+cd frontend && npm run test:e2e   # 화면(브라우저) 자동 테스트 5개 (Playwright + 설치된 크롬, DB 컨테이너 필요)
 ```
-개발 DB(`qa_review`)는 테스트가 건드리지 않는다. 화면(브라우저) 자동 테스트는 아직 없다.
+개발 DB(`qa_review`)는 테스트가 건드리지 않는다. 화면 테스트는 전용 DB `qa_review_test`와 API 3201·프론트 5273 포트를 스스로 띄웠다 끈다(`backend/test/e2e-server.mjs`, `frontend/playwright.config.ts`).
 
 ## DB 실행
 ```
