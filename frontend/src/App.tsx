@@ -1,21 +1,23 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { useEffect } from 'react'
+import { lazy, useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { LoginPage, SignupPage } from '@/pages/AuthPages'
-import { AssignmentListPage } from '@/pages/AssignmentListPage'
 import { Placeholder } from '@/pages/Placeholder'
 import { PLACEHOLDER_PATHS } from '@/config/menu'
-import { MenusPage } from '@/pages/MenusPage'
-import { RolesPage } from '@/pages/RolesPage'
-import { UploadPage } from '@/pages/UploadPage'
-import { TimeAnalysisPage } from '@/pages/TimeAnalysisPage'
-import { IntegrationsPage } from '@/pages/IntegrationsPage'
-import { UsersPage } from '@/pages/UsersPage'
-import { RulesPage } from '@/pages/RulesPage'
 import { useAuth } from '@/stores/auth'
+
+// 화면 본문은 처음 열 때 내려받는다 (로그인·레이아웃만 첫 번들에 포함). 각 페이지는 named export라 default로 감싼다.
+const AssignmentListPage = lazy(() => import('@/pages/AssignmentListPage').then((m) => ({ default: m.AssignmentListPage })))
+const TimeAnalysisPage = lazy(() => import('@/pages/TimeAnalysisPage').then((m) => ({ default: m.TimeAnalysisPage })))
+const IntegrationsPage = lazy(() => import('@/pages/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })))
+const RulesPage = lazy(() => import('@/pages/RulesPage').then((m) => ({ default: m.RulesPage })))
+const UploadPage = lazy(() => import('@/pages/UploadPage').then((m) => ({ default: m.UploadPage })))
+const UsersPage = lazy(() => import('@/pages/UsersPage').then((m) => ({ default: m.UsersPage })))
+const RolesPage = lazy(() => import('@/pages/RolesPage').then((m) => ({ default: m.RolesPage })))
+const MenusPage = lazy(() => import('@/pages/MenusPage').then((m) => ({ default: m.MenusPage })))
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } })
 

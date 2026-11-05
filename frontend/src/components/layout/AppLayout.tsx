@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Link, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ShieldAlert } from 'lucide-react'
@@ -27,7 +28,10 @@ export function AppLayout() {
         <SideMenu menus={menus} />
         <main className="min-w-0 flex-1 overflow-auto bg-muted/30 p-6">
           {allowed ? (
-            <Outlet />
+            // 본문을 내려받는 동안에도 상단·좌측 메뉴는 그대로 둔다
+            <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">불러오는 중…</p>}>
+              <Outlet />
+            </Suspense>
           ) : (
             <div className="flex h-full min-h-80 flex-col items-center justify-center gap-3 text-muted-foreground">
               <ShieldAlert className="size-10" />
