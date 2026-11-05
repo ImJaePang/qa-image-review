@@ -4,6 +4,7 @@ import { httpError } from '../errors.mjs'
 import { BLOCKED_MESSAGE, DEFAULT_ROLE, EXPIRY_YEARS, PROFILE_FIELDS, assertRole, effectiveStatus, rejectUnknownProfile } from '../account.mjs'
 import { txWith } from '../tx.mjs'
 import { loadPermissions } from '../permissions.mjs'
+import { assertNotLocked, clearFailures, recordFailure } from '../loginGuard.mjs'
 
 const toUser = (r) => ({ id: String(r.id), name: r.name, email: r.email, role: r.role })
 
@@ -32,11 +33,16 @@ export default async function authRoutes(app) {
     },
     async (req, reply) => {
       const { email, password } = req.body
+      await assertNotLocked(pool, email, req.ip) // 잠겨 있으면 비밀번호를 검사하지 않는다
       const { rows } = await pool.query(
         'SELECT id, name, email, role, status, expires_at FROM users WHERE lower(email) = lower($1) AND password_hash = crypt($2, password_hash)',
         [email, password],
       )
-      if (!rows.length) throw httpError(401, '이메일 또는 비밀번호가 올바르지 않습니다.')
+      if (!rows.length) {
+        await recordFailure(pool, email, req.ip)
+        throw httpError(401, '이메일 또는 비밀번호가 올바르지 않습니다.')
+      }
+      await clearFailures(pool, email) // 비밀번호가 맞았으므로 (계정 상태와 무관하게) 실패 횟수를 지운다
       // 비밀번호가 맞은 뒤에만 상태를 알려 준다 (틀린 경우에 알려 주면 계정 존재 여부가 드러난다)
       const status = effectiveStatus(rows[0])
       if (status !== 'ACTIVE') {
@@ -110,11 +116,16 @@ export default async function authRoutes(app) {
     { schema: { body: { type: 'object', required: ['email', 'password'], properties: { email: { type: 'string', maxLength: 200 }, password: { type: 'string', maxLength: 200 } } } } },
     async (req) => {
       const { email, password } = req.body
+      await assertNotLocked(pool, email, req.ip)
       const { rows } = await pool.query(
         'SELECT id, status, expires_at FROM users WHERE lower(email) = lower($1) AND password_hash = crypt($2, password_hash)',
         [email, password],
       )
-      if (!rows.length) throw httpError(401, '이메일 또는 비밀번호가 올바르지 않습니다.')
+      if (!rows.length) {
+        await recordFailure(pool, email, req.ip)
+        throw httpError(401, '이메일 또는 비밀번호가 올바르지 않습니다.')
+      }
+      await clearFailures(pool, email)
       if (effectiveStatus(rows[0]) !== 'EXPIRED') throw httpError(409, '만료된 계정만 해제를 요청할 수 있습니다.')
       await txWith(pool, async (client) => {
         await client.query('UPDATE users SET expiry_release_requested_at = now() WHERE id = $1', [rows[0].id])

@@ -49,6 +49,7 @@ export async function buildApp(opts = {}) {
     if (err.validation) return reply.code(400).send({ message: '요청 값이 올바르지 않습니다.', detail: err.message })
     const status = err.statusCode ?? 500
     if (status >= 500) request.log.error(err)
+    if (err.retryAfter) reply.header('Retry-After', String(err.retryAfter))
     reply.code(status).send({ message: status >= 500 ? '서버 오류가 발생했습니다.' : err.message, ...(err.appCode ? { code: err.appCode } : {}) })
   })
 

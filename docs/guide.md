@@ -213,7 +213,7 @@ cd backend && npm run worker     # API와 별도 프로세스. 하나만 실행 
 ## 8. 테스트
 
 ```bash
-cd backend && npm test        # 208개: API 통합, 사용자·권한·메뉴, 업로드, 파일 API, 수신·워커, 사본 생성, 마이그레이션, 모델 계약·어댑터
+cd backend && npm test        # 218개: API 통합, 로그인 시도 제한, 사용자·권한·메뉴, 업로드, 파일 API, 수신·워커, 사본 생성, 마이그레이션, 모델 계약·어댑터
 cd frontend && npm test       # 50개: 영문 코드↔한글 매핑, 페이징, 사용자·권한 문구, 업로드 전송 큐 등
 cd frontend && npx tsc -b     # 타입 체크
 cd python && .venv/Scripts/python -m unittest test_metrics test_postprocess   # 17개: 평가 지표·점수 변환·박스 (모델 없이)
@@ -244,4 +244,4 @@ cd python && .venv/Scripts/python -m unittest test_metrics test_postprocess   # 
 
 README의 "다음에 이어서 할 일"이 최신이다. 요약:
 - 실제 모델(PatchCore)은 연결·평가까지 끝났다. 다만 이 데이터에서는 성능이 낮다(AUROC 0.683) — 개선·다른 모델 비교는 필요할 때(design.md 9장 마지막). 다국어(design.md 6장), 임시 비밀번호 이메일 발송은 아직.
-- 알려진 한계: 로그인 시도 횟수 제한 없음, 화면 자동 테스트 없음, 목 모델의 박스·점수는 가짜라 `ground_truth.jsonl`과 무관하다(실제 모델은 `python/evaluate.py`로 정답과 비교).
+- 알려진 한계: 화면 자동 테스트 없음, 로그인 잠금은 15분 뒤 자동 해제만 가능(관리자 수동 해제 없음, 프록시 뒤에서는 `trustProxy` 필요), 목 모델의 박스·점수는 가짜라 `ground_truth.jsonl`과 무관하다(실제 모델은 `python/evaluate.py`로 정답과 비교).
