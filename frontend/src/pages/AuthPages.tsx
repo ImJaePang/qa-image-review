@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Logo } from '@/components/layout/TopBar'
+import { ChangePasswordForm } from '@/components/auth/ChangePasswordForm'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth, useCurrentUser } from '@/stores/auth'
 import type { SignupRole } from '@/lib/types'
@@ -35,6 +36,30 @@ function AuthShell({ title, desc, children }: { title: string; desc: string; chi
         </Card>
       </div>
     </div>
+  )
+}
+
+/** 임시 비밀번호로 로그인한 직후: 비밀번호를 바꾸기 전에는 다른 화면을 쓸 수 없다 */
+export function ForcePasswordChangePage() {
+  const logout = useAuth((s) => s.logout)
+  const navigate = useNavigate()
+  return (
+    <AuthShell title="비밀번호를 변경해 주세요" desc="임시 비밀번호로 로그인했습니다. 새 비밀번호로 바꾼 뒤 사용할 수 있습니다.">
+      <div className="space-y-4">
+        {/* 변경이 끝나면 스토어의 mustChangePassword가 내려가 원래 화면으로 돌아간다 */}
+        <ChangePasswordForm />
+        <button
+          type="button"
+          className="w-full text-center text-sm text-muted-foreground hover:underline"
+          onClick={async () => {
+            await logout()
+            navigate('/login')
+          }}
+        >
+          나중에 하기 (로그아웃)
+        </button>
+      </div>
+    </AuthShell>
   )
 }
 

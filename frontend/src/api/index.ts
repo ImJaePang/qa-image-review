@@ -292,6 +292,8 @@ export const api = {
   /** 만료된 사용자가 로그인 없이 해제를 요청한다 (본인 확인용으로 이메일·비밀번호를 다시 보낸다) */
   requestExpiryRelease: (email: string, password: string) => post<{ ok: true; message: string }>('/auth/expiry-release-request', { email, password }),
   logout: () => post<{ ok: true }>('/auth/logout'),
+  /** 본인 비밀번호 변경. 현재 비밀번호가 틀리면 400(WRONG_PASSWORD) */
+  changePassword: (currentPassword: string, newPassword: string) => post<{ ok: true }>('/auth/change-password', { currentPassword, newPassword }),
   /** 가입 화면용(로그인 전): 신청할 수 있는 권한 */
   signupRoles: () => get<{ roles: { code: string; label: string }[] }>('/auth/signup-roles').then((r) => r.roles),
   listRoles: () => get<{ roles: RoleInfo[] }>('/roles').then((r) => r.roles),
@@ -365,7 +367,8 @@ export const api = {
   updateAdminUser: (id: string, input: { name?: string; role?: Role; expiresAt?: string; profile?: Partial<UserProfile> }) => patch<AdminUser>(`/admin/users/${id}`, input),
   bulkUsers: (action: BulkAction, ids: string[], role?: Role) =>
     post<BulkResult & { action: BulkAction }>('/admin/users/bulk', { action, ids: ids.map(Number), ...(role ? { role } : {}) }),
-  resetPassword: (id: string) => post<{ tempPassword: string }>(`/admin/users/${id}/reset-password`),
+  /** 메일이 켜져 있으면 사용자 메일로만 보내고 { sent, to(가린 주소) }, 꺼져 있으면 { tempPassword }를 한 번 돌려준다 */
+  resetPassword: (id: string) => post<{ sent: true; to: string } | { sent?: undefined; tempPassword: string }>(`/admin/users/${id}/reset-password`),
 
   // ── 이미지 업로드 ──
   uploadLimits: () => get<{ limits: UploadLimits }>('/uploads/limits').then((r) => r.limits),

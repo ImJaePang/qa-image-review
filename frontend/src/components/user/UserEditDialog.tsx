@@ -45,6 +45,7 @@ export function UserEditDialog({ userId, onClose }: { userId: string | null; onC
   const [expires, setExpires] = useState('')
   const [profile, setProfile] = useState<UserProfile>({ company: '', department: '', jobTitle: '', phone: '', companyAddress: '' })
   const [tempPw, setTempPw] = useState<string | null>(null)
+  const [sentTo, setSentTo] = useState('')
 
   // 처음 불러왔을 때만 폼을 채운다 (저장 후 다시 불러와도 입력 중인 값을 덮지 않도록 사용자 id 기준)
   const [filledKey, setFilledKey] = useState('')
@@ -56,6 +57,7 @@ export function UserEditDialog({ userId, onClose }: { userId: string | null; onC
     setExpires(user.expiresAt ? fmtDate(user.expiresAt) : '')
     setProfile(user.profile)
     setTempPw(null)
+    setSentTo('')
   }
 
   const refresh = () => {
@@ -95,7 +97,14 @@ export function UserEditDialog({ userId, onClose }: { userId: string | null; onC
   const reset = useMutation({
     mutationFn: () => api.resetPassword(user!.id),
     onSuccess: (r) => {
-      setTempPw(r.tempPassword)
+      if (r.sent) {
+        // 메일 발송: 관리자는 임시 비밀번호를 볼 수 없다
+        setTempPw('')
+        setSentTo(r.to)
+      } else {
+        setSentTo('')
+        setTempPw(r.tempPassword)
+      }
       refresh()
     },
     onError: (e: Error) => toast.error(e.message),
@@ -143,13 +152,19 @@ export function UserEditDialog({ userId, onClose }: { userId: string | null; onC
                   임시 비밀번호로 초기화
                 </Button>
               </div>
+              {sentTo && (
+                <div className="rounded-md border border-primary/40 bg-accent px-3 py-2 text-sm">
+                  임시 비밀번호를 <span className="font-medium">{sentTo}</span>(으)로 메일 발송했습니다.
+                  <p className="mt-1 text-xs text-muted-foreground">관리자는 비밀번호를 볼 수 없습니다. 사용자는 로그인 직후 새 비밀번호로 바꿔야 합니다.</p>
+                </div>
+              )}
               {tempPw && (
                 <div className="rounded-md border border-primary/40 bg-accent px-3 py-2 text-sm">
                   임시 비밀번호: <span className="select-all font-mono font-semibold">{tempPw}</span>
                   <Button variant="ghost" size="xs" className="ml-2" onClick={() => navigator.clipboard?.writeText(tempPw).then(() => toast.success('복사했습니다'))}>
                     복사
                   </Button>
-                  <p className="mt-1 text-xs text-muted-foreground">이 창을 닫으면 다시 볼 수 없습니다. 사용자에게 전달해 주세요.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">이 창을 닫으면 다시 볼 수 없습니다. 사용자에게 전달해 주세요. 사용자는 로그인 직후 새 비밀번호로 바꿔야 합니다.</p>
                 </div>
               )}
             </section>

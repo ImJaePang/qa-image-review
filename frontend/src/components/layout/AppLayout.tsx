@@ -5,6 +5,7 @@ import { ShieldAlert } from 'lucide-react'
 import { api } from '@/api'
 import { allLeaves } from '@/config/menu'
 import { useAuth } from '@/stores/auth'
+import { ForcePasswordChangePage } from '@/pages/AuthPages'
 import { TopBar } from './TopBar'
 import { SideMenu } from './SideMenu'
 
@@ -13,9 +14,11 @@ export function AppLayout() {
   const ready = useAuth((s) => s.ready)
   const loc = useLocation()
   // 메뉴는 서버가 내 권한으로 볼 수 있는 것만 내려준다 (권한표를 바꾸면 다음에 불러올 때 바로 바뀐다)
-  const { data: menus } = useQuery({ queryKey: ['menus', user?.id, user?.permissions.join(',')], queryFn: api.myMenus, enabled: !!user })
+  const { data: menus } = useQuery({ queryKey: ['menus', user?.id, user?.permissions.join(',')], queryFn: api.myMenus, enabled: !!user && !user.mustChangePassword })
   if (!ready) return <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">불러오는 중…</div>
   if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname }} />
+  // 임시 비밀번호 상태에서는 서버가 메뉴 등 다른 API를 막으므로 변경 화면만 보여 준다
+  if (user.mustChangePassword) return <ForcePasswordChangePage />
   if (!menus) return <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">불러오는 중…</div>
 
   const leaves = allLeaves(menus)

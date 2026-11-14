@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { LogOut, Moon, ScanSearch, Sun } from 'lucide-react'
+import { KeyRound, LogOut, Moon, ScanSearch, Sun } from 'lucide-react'
+import { ChangePasswordDialog } from '@/components/auth/ChangePasswordDialog'
 import { useRoles } from '@/hooks/useRoles'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +29,7 @@ export function TopBar({ menus }: { menus: TopMenu[] }) {
   const logout = useAuth((s) => s.logout)
   const { theme, toggle } = useTheme()
   const active = topKeyOfPath(menus, pathname)
+  const [pwOpen, setPwOpen] = useState(false)
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-6 border-b bg-background px-4">
@@ -61,6 +64,10 @@ export function TopBar({ menus }: { menus: TopMenu[] }) {
         <Button variant="ghost" size="icon" onClick={toggle} aria-label="테마 전환">
           {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </Button>
+        <Button variant="ghost" size="sm" onClick={() => setPwOpen(true)}>
+          <KeyRound className="size-4" /> 비밀번호 변경
+        </Button>
+        <ChangePasswordDialog open={pwOpen} onClose={() => setPwOpen(false)} />
         <Button
           variant="outline"
           size="sm"

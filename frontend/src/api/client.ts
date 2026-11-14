@@ -18,6 +18,12 @@ export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn
 }
 
+let onMustChangePassword: (() => void) | null = null
+/** 로그인 중에 관리자가 임시 비밀번호로 초기화하면 서버가 403 MUST_CHANGE_PASSWORD를 준다 (인증 스토어가 등록) */
+export function setMustChangePasswordHandler(fn: () => void) {
+  onMustChangePassword = fn
+}
+
 export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response
   try {
@@ -33,6 +39,7 @@ export async function request<T>(method: string, path: string, body?: unknown): 
   if (!res.ok) {
     // 로그인/가입 실패의 401은 세션 만료가 아니므로 제외
     if (res.status === 401 && !path.startsWith('/auth/login')) onUnauthorized?.()
+    if (res.status === 403 && data?.code === 'MUST_CHANGE_PASSWORD') onMustChangePassword?.()
     throw new ApiError(res.status, data?.message ?? '요청에 실패했습니다.', data?.code)
   }
   return data as T

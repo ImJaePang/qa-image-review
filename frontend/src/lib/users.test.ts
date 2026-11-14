@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { BULK_CHUNK, bulkActionsFor, chunk, describeUserHistory, mergeBulkResults, summarizeBulk } from './users'
+import { BULK_CHUNK, bulkActionsFor, chunk, describeUserHistory, mergeBulkResults, summarizeBulk, validatePasswordChange } from './users'
 
 const LABELS: Record<string, string> = { admin: '관리자', researcher: '연구원', qa: 'QA' }
 const role = (r: string) => LABELS[r] ?? r
@@ -39,5 +39,19 @@ describe('이력 문구', () => {
     expect(describeUserHistory({ action: 'ROLE', detail: { from: 'qa', to: 'researcher' } }, role)).toEqual(['권한: QA → 연구원'])
     expect(describeUserHistory({ action: 'EXPIRY_RELEASE', detail: { to: '2027-11-04T00:00:00Z' } }, role)).toEqual(['만료 해제 (사용기한 2027-11-04)'])
     expect(describeUserHistory({ action: 'PROFILE', detail: { company: { from: '', to: '한빛' }, name: { from: 'a', to: 'b' } } }, role)).toEqual(['업체: (없음) → 한빛', '이름: a → b'])
+  })
+})
+
+describe('비밀번호 변경 입력 검사', () => {
+  test('길이·현재와 동일·확인 불일치', () => {
+    expect(validatePasswordChange('old-pass-1', 'short', 'short')).toBe('새 비밀번호는 8자 이상이어야 합니다.')
+    expect(validatePasswordChange('same-pass-1', 'same-pass-1', 'same-pass-1')).toBe('새 비밀번호는 현재 비밀번호와 달라야 합니다.')
+    expect(validatePasswordChange('old-pass-1', 'new-pass-22', 'new-pass-23')).toBe('새 비밀번호 확인이 일치하지 않습니다.')
+    expect(validatePasswordChange('old-pass-1', 'new-pass-22', 'new-pass-22')).toBeNull()
+  })
+  test('메일 발송 여부가 이력 문구에 반영된다', () => {
+    expect(describeUserHistory({ action: 'PASSWORD_RESET', detail: { via: 'EMAIL' } }, role)).toEqual(['임시 비밀번호 발급 (메일 발송)'])
+    expect(describeUserHistory({ action: 'PASSWORD_RESET', detail: {} }, role)).toEqual(['임시 비밀번호 발급'])
+    expect(describeUserHistory({ action: 'PASSWORD_CHANGE', detail: {} }, role)).toEqual(['비밀번호 변경 (본인)'])
   })
 })

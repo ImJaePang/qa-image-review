@@ -16,6 +16,17 @@ export const BULK_LABEL: Record<BulkAction, string> = {
 /** 서버 한 번 호출당 상한 (backend BULK_MAX). 더 많이 고르면 이 크기로 끊어 연속 호출한다 */
 export const BULK_CHUNK = 100
 
+/** 새 비밀번호 최소 길이 (서버 auth.mjs의 MIN_PASSWORD와 같다) */
+export const MIN_PASSWORD = 8
+
+/** 비밀번호 변경 입력 검사. 문제가 없으면 null, 있으면 안내 문구 */
+export function validatePasswordChange(current: string, next: string, confirm: string): string | null {
+  if (next.length < MIN_PASSWORD) return `새 비밀번호는 ${MIN_PASSWORD}자 이상이어야 합니다.`
+  if (next === current) return '새 비밀번호는 현재 비밀번호와 달라야 합니다.'
+  if (next !== confirm) return '새 비밀번호 확인이 일치하지 않습니다.'
+  return null
+}
+
 /** 상태 필터별로 일괄 처리 버튼에 보여 줄 동작. 전체 보기에서는 일괄 처리를 숨긴다(상태가 섞여 있어 대부분 건너뛰게 된다) */
 export function bulkActionsFor(status: UserStatus | 'ALL'): BulkAction[] {
   switch (status) {
@@ -85,7 +96,9 @@ export function describeUserHistory(h: { action: string; detail: Record<string, 
     case 'EXPIRES':
       return [`사용기한: ${day(d.from)} → ${day(d.to)}`]
     case 'PASSWORD_RESET':
-      return ['임시 비밀번호 발급']
+      return [d.via === 'EMAIL' ? '임시 비밀번호 발급 (메일 발송)' : '임시 비밀번호 발급']
+    case 'PASSWORD_CHANGE':
+      return ['비밀번호 변경 (본인)']
     case 'PROFILE':
       return Object.entries(d).map(([k, v]) => {
         const label = k === 'name' ? '이름' : (PROFILE_LABEL[k as ProfileKey] ?? k)

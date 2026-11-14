@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { SignupRole, User } from '@/lib/types'
 import type { UserProfile } from '@/lib/users'
 import { api } from '@/api'
-import { setUnauthorizedHandler } from '@/api/client'
+import { setMustChangePasswordHandler, setUnauthorizedHandler } from '@/api/client'
 
 // 세션은 서버가 httpOnly 쿠키로 관리한다. 여기서는 현재 사용자만 메모리에 둔다.
 interface AuthState {
@@ -14,6 +14,8 @@ interface AuthState {
   /** 가입 신청. 로그인되지 않으며 승인 대기 안내 문구를 돌려준다 */
   signup: (name: string, email: string, password: string, requestedRole: SignupRole, profile: Partial<UserProfile>) => Promise<string>
   logout: () => Promise<void>
+  /** 비밀번호 변경 후 '변경 필요' 표시를 내린다 */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>
 }
 
 export const useAuth = create<AuthState>()((set) => ({
@@ -32,7 +34,14 @@ export const useAuth = create<AuthState>()((set) => ({
     await api.logout().catch(() => undefined)
     set({ user: null })
   },
+  changePassword: async (currentPassword, newPassword) => {
+    await api.changePassword(currentPassword, newPassword)
+    set((s) => ({ user: s.user ? { ...s.user, mustChangePassword: false } : s.user }))
+  },
 }))
+
+// 로그인 중 임시 비밀번호로 초기화된 경우: 비밀번호 변경 화면으로 바꾼다
+setMustChangePasswordHandler(() => useAuth.setState((s) => ({ user: s.user ? { ...s.user, mustChangePassword: true } : s.user })))
 
 // 세션 만료(401) 시 로그인 화면으로 보낸다
 setUnauthorizedHandler(() => useAuth.setState({ user: null }))

@@ -102,6 +102,8 @@ export interface User {
   name: string
   email: string
   role: Role
+  /** 임시 비밀번호로 로그인한 계정: 비밀번호를 바꾸기 전에는 다른 화면·API를 쓸 수 없다 */
+  mustChangePassword?: boolean
   /** 서버의 권한 코드(role_permissions). 화면의 메뉴·버튼 표시용이며, 실제 차단은 서버가 같은 표로 한다 */
   permissions: string[]
 }
