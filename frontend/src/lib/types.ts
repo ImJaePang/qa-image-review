@@ -54,6 +54,23 @@ export interface ImageItem extends ImageResult {
   review: ImageReview
 }
 
+/** 점검 이력 한 줄: 검수(승인/반려) 한 번. 번복하면 새 줄이 쌓이고 이전 줄은 isCurrent=false */
+export interface ReviewHistoryItem {
+  id: string
+  status: '승인' | '반려'
+  comment: string
+  decidedAt: string
+  reviewerName: string
+  assignmentId: string
+  assignmentTitle: string
+  imageKey: string
+  fileName: string
+  overallScore: number
+  verdict: Verdict
+  thumbUrl: string
+  isCurrent: boolean
+}
+
 // 사전배치 단계는 없다: 이미지는 수신 시점에 이미 추론·판정되어 있다 (db/migrations/002)
 export type AssignmentStatus = '배정' | '점검중' | '점검완료' | '확인완료'
 export const ASSIGNMENT_STATUSES: AssignmentStatus[] = ['배정', '점검중', '점검완료', '확인완료']

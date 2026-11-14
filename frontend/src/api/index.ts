@@ -1,5 +1,5 @@
 // 백엔드 API 호출. 화면 코드는 한글 값만 다루고, 변환은 mappers에서 한다.
-import type { AssignmentListItem, AssignmentStatus, ImageItem, Role, SignupRole, User, Verdict } from '@/lib/types'
+import type { AssignmentListItem, AssignmentStatus, ImageItem, ReviewHistoryItem, Role, SignupRole, User, Verdict } from '@/lib/types'
 import type { TopMenu } from '@/config/menu'
 import type { BulkAction, BulkResult, UserProfile, UserStatus } from '@/lib/users'
 import { ApiError, del, get, patch, post, put } from './client'
@@ -425,6 +425,24 @@ export const api = {
   rejudge: (id: string, scope: 'unassigned' | 'all') => post<RejudgeResult>(`/rules/${id}/rejudge`, { scope }),
   ruleHistory: () => get<{ items: RuleHistoryItem[] }>('/rules/history').then((r) => r.items),
 
+  /** 점검 이력: 검수 기록 목록. scope=all은 배정 관리 권한이 있어야 한다 */
+  async listReviewHistory(p: { scope: 'mine' | 'all'; status?: '승인' | '반려'; q?: string; page: number; pageSize: number }) {
+    const qs = new URLSearchParams({ scope: p.scope, page: String(p.page), pageSize: String(p.pageSize) })
+    if (p.status) qs.set('status', REVIEW_CODE[p.status])
+    if (p.q) qs.set('q', p.q)
+    const r = await get<{
+      items: (Omit<ReviewHistoryItem, 'status' | 'verdict'> & { status: 'APPROVED' | 'REJECTED'; verdict: VerdictCode })[]
+      total: number
+      page: number
+      pageSize: number
+      statusCounts: { APPROVED: number; REJECTED: number }
+    }>(`/review-history?${qs}`)
+    return {
+      ...r,
+      items: r.items.map((i): ReviewHistoryItem => ({ ...i, status: i.status === 'APPROVED' ? '승인' : '반려', verdict: VERDICT_KO[i.verdict] })),
+      statusCounts: { 승인: r.statusCounts.APPROVED, 반려: r.statusCounts.REJECTED },
+    }
+  },
   reviewImage: (id: string, imageId: string, status: '승인' | '반려', comment: string) =>
     put<{ progress: { reviewed: number; approved: number; rejected: number } }>(
       `/assignments/${id}/images/${imageId}/review`,

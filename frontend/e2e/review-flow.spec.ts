@@ -64,6 +64,13 @@ test('배정 → 점검 시작 → 승인/반려 → 점검 완료 → 확인 �
   await expect(page.getByText(/‘점검완료’\(으\)로 변경/)).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
+
+  // ── QA: 점검 이력에 방금 한 검수 5건(승인 3, 반려 2)이 남아 있다 ──
+  await page.getByRole('link', { name: '점검 이력' }).click()
+  await expect(page.getByRole('heading', { name: '점검 이력' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^승인\s*3$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^반려\s*2$/ })).toBeVisible()
+  await expect(page.getByRole('row', { name: new RegExp(TITLE) })).toHaveCount(COUNT)
   await logout(page)
 
   // ── 관리자: 확인 완료 ──
