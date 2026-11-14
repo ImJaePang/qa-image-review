@@ -10,10 +10,18 @@ backend/    Node.js(Fastify) API + 파일 수신 워커, PostgreSQL
 python/     실제 모델(PatchCore) 학습·추론 서버·평가 도구
 db/init/    스키마·시드 SQL (컨테이너 최초 기동 시 자동 실행)
 db/migrations/  이후 변경 SQL (번호순, `npm run migrate`로 적용, 적용 이력은 schema_migrations)
-docs/       기획서(plan.md), 설계·진행 기록(design.md), 사용 방법(guide.md), 개념 정리(study-notes.md)
+docs/       기획서(plan.md), 설계·진행 기록(design.md), 사용 방법(guide.md), 배포 방법(deploy.md), 개념 정리(study-notes.md)
+Dockerfile  화면+API를 한 이미지로 묶는 배포 구성 (docker-compose.yml의 `app` 프로필)
 ```
 
-## 실행 (프론트엔드)
+## 한 줄 실행 (Docker만 있으면 됨)
+```
+cp .env.example .env      # 비밀번호·JWT_SECRET 수정
+docker compose --profile app up -d --build   # http://localhost:8080
+```
+데모 데이터 300장이 자동으로 만들어진다. 공개·배포는 [docs/deploy.md](docs/deploy.md).
+
+## 실행 (프론트엔드, 개발)
 ```
 cd frontend
 npm install
@@ -62,13 +70,18 @@ npm run dev
 
 23. [x] 로그인 시도 횟수 제한: 이메일당 15분에 5번 / 주소당 30번 실패하면 15분 잠금(429 `LOCKED`), 없는 이메일도 똑같이 처리, 성공하면 초기화, 만료 해제 요청과 횟수 공유. 마이그레이션 013, `src/loginGuard.mjs`
 
-남은 후보(필요할 때): 모델 개선·다른 모델 비교(평가 도구 있음), 이메일 발송(임시 비밀번호), 다국어(design.md 6장).
+24. [x] 임시 비밀번호 메일 발송 + 비밀번호 변경 강제: 백엔드(마이그레이션 014, `src/mail.mjs`, `POST /auth/change-password`, `MAIL_MODE`)와 화면. 임시 비밀번호로 로그인하면 변경 화면만 보이고(서버도 다른 API를 403으로 막음) 바꾸면 원래 화면으로 간다. 상단 `비밀번호 변경`으로 본인이 언제든 변경 가능, 사용자 수정 모달은 메일 발송 시 "메일로 발송했습니다"(관리자는 비밀번호를 못 봄)를 보여 준다. Playwright 시나리오 추가.
+
+25. [x] 배포 준비: `Dockerfile`(화면 빌드+API 한 이미지), `docker-compose.yml`의 `app`·`worker`(프로필 `app`), 시작 시 마이그레이션·데모 데이터 자동 준비(`backend/scripts/docker-start.mjs`), API 서버의 화면 서빙(`FRONTEND_DIST`), `HOST`·`TRUST_PROXY`·`COOKIE_SECURE` 설정, `LICENSE`(MIT), [docs/deploy.md](docs/deploy.md). 전체 스택을 격리 환경에서 띄워 로그인·파일 API·워커까지 확인.
+
+남은 후보(필요할 때): 공개용 데모 정리(로그인 화면의 데모 계정 안내·기본 입력값, 데모 배정 미리 만들기), 포트폴리오용 화면 캡처·README 소개, 로그인·검수 핵심 흐름 E2E, 모델 개선·다른 모델 비교(평가 도구 있음), 다국어(design.md 6장).
 
 ### 점검 메모 (2026-11-04)
-전체 점검 결과: 백엔드 테스트 208개·프론트 50개·파이썬 17개 모두 통과, `tsc -b`·`vite build` 성공. 정리할 작은 항목:
+전체 점검 결과(2026-11-04 시점, 현재 개수는 아래 테스트 절): 백엔드 테스트 208개·프론트 50개·파이썬 17개 모두 통과, `tsc -b`·`vite build` 성공. 정리할 작은 항목:
 - 프론트 린트(`npm run lint`, oxlint): 경고 0 (2026-11-05 정리, 바뀐 5곳은 Playwright 화면 테스트로 확인). 모달·폼을 불러온 값으로 채우던 `useEffect`+`setState`를 "렌더 중에 키가 바뀐 때만 한 번 채우기"로 바꿨고(UserEditDialog, RoleEditDialog, IntegrationFormDialog, RulesPage, MenusPage), shadcn 생성 폴더 `components/ui`는 `only-export-components` 규칙을 껐다. 브라우저 동작 확인은 아직 안 함.
 - 번들 분할 완료(2026-11-05): 화면 본문 9개를 `React.lazy`로 나눠 첫 번들이 770KB → 373KB(gzip 241 → 118KB). 본문을 받는 동안에는 상단·좌측 메뉴를 유지하고 본문만 '불러오는 중…'. 이 점검 항목은 모두 정리됨.
-- 화면 자동 테스트는 폼 5곳만 있음(Playwright). 로그인·검수 흐름 같은 핵심 시나리오는 아직 없다.
+- 화면 자동 테스트(Playwright)는 폼 5곳 + 임시 비밀번호→변경 강제 흐름 1개. 로그인·검수 흐름 같은 핵심 시나리오는 아직 없다.
+- (2026-11-14) `npm test`(vitest)가 `e2e/` 폴더를 읽어 실패하던 문제를 `vite.config.ts`의 `test.exclude`로 고쳤다.
 
 새 세션 시작: `README.md 읽고 이어서 해줘` 한 줄이면 된다 (CLAUDE.md가 README → design.md 순서로 읽도록 안내함).
 
@@ -76,7 +89,7 @@ npm run dev
 
 ## 진행 현황
 - [x] 프론트엔드 목업: 로그인/회원가입, 레이아웃(상단·좌측·우측), 배정 리스트, 신규 배정 모달, 배정 상세(이미지 검수·이력)
-- [x] DB 스키마 + `docker-compose.yml` (Postgres 16, 최초 11개 테이블 + 뷰 2개로 시작, 마이그레이션 013까지 적용 후 27개 테이블(`schema_migrations` 포함) + 뷰 2개)
+- [x] DB 스키마 + `docker-compose.yml` (Postgres 16, 최초 11개 테이블 + 뷰 2개로 시작, 마이그레이션 014까지 적용 후 28개 테이블(`schema_migrations` 포함) + 뷰 2개)
 - [x] JSON → DB 적재 스크립트: `cd backend && npm install && npm run load-mock` (3천 장 적재 검증, 재실행해도 중복 없음)
 - [x] 목 이미지/모델 결과 생성 스크립트: `node backend/scripts/generate-mock.mjs --count 3000` → `data/images/`(git 제외), `results.jsonl`은 5장 JSON 계약 + originalPath/durationMs
 - [x] 백엔드 API (Fastify): 인증, 배정 목록/상세/신규/상태 변경/점검 내용, 이미지 페이지 조회, 검수 저장, 파일 서빙 (`cd backend && npm run dev`, 포트 3000)
@@ -105,11 +118,11 @@ cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api는 API
 
 ## 테스트
 ```
-cd backend && npm test      # 백엔드 테스트 218개 (API 통합, 사용자·권한·메뉴, 업로드, 수신·워커, 마이그레이션, 모델 계약·어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
-cd frontend && npm test     # 단위 테스트 50개 (영문 코드↔한글 매핑, 페이징, 사용자·권한 문구, 업로드 전송 큐 등)
+cd backend && npm test      # 백엔드 테스트 225개 (API 통합, 사용자·권한·메뉴, 업로드, 수신·워커, 마이그레이션, 모델 계약·어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
+cd frontend && npm test     # 단위 테스트 52개 (영문 코드↔한글 매핑, 페이징, 사용자·권한 문구, 업로드 전송 큐 등)
 cd frontend && npx tsc -b   # 타입 체크
 cd python && .venv/Scripts/python -m unittest test_metrics test_postprocess   # 파이썬 단위 테스트 17개 (모델 없이 실행)
-cd frontend && npm run test:e2e   # 화면(브라우저) 자동 테스트 5개 (Playwright + 설치된 크롬, DB 컨테이너 필요)
+cd frontend && npm run test:e2e   # 화면(브라우저) 자동 테스트 6개 (Playwright + 설치된 크롬, DB 컨테이너 필요)
 ```
 개발 DB(`qa_review`)는 테스트가 건드리지 않는다. 화면 테스트는 전용 DB `qa_review_test`와 API 3201·프론트 5273 포트를 스스로 띄웠다 끈다(`backend/test/e2e-server.mjs`, `frontend/playwright.config.ts`).
 
