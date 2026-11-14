@@ -14,6 +14,7 @@ const AssignmentListPage = lazy(() => import('@/pages/AssignmentListPage').then(
 const MyAssignmentsPage = lazy(() => import('@/pages/AssignmentListPage').then((m) => ({ default: () => <m.AssignmentListPage mine /> })))
 const HistoryPage = lazy(() => import('@/pages/HistoryPage').then((m) => ({ default: m.HistoryPage })))
 const ImagesPage = lazy(() => import('@/pages/ImagesPage').then((m) => ({ default: m.ImagesPage })))
+const DashboardPage = lazy(() => import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })))
 const TimeAnalysisPage = lazy(() => import('@/pages/TimeAnalysisPage').then((m) => ({ default: m.TimeAnalysisPage })))
 const IntegrationsPage = lazy(() => import('@/pages/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })))
 const RulesPage = lazy(() => import('@/pages/RulesPage').then((m) => ({ default: m.RulesPage })))
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route element={<AppLayout />}>
+              <Route path="/home/dashboard" element={<DashboardPage />} />
               <Route path="/review/assignments" element={<AssignmentListPage />} />
               <Route path="/review/my-assignments" element={<MyAssignmentsPage />} />
               <Route path="/review/history" element={<HistoryPage />} />

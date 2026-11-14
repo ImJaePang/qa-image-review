@@ -20,6 +20,19 @@ import {
   type VerdictCode,
 } from './mappers'
 
+/** 대시보드(홈). 판정·상태 키는 서버의 영문 코드 그대로 두고 한글은 화면에서 붙인다 */
+export interface Dashboard {
+  /** 이미지 분포는 전체/내 것, 배정·검수 진행·최근 7일은 전체/내 것 (권한에 따라 다르다) */
+  scope: { images: 'all' | 'mine'; work: 'all' | 'mine' }
+  images: Record<VerdictCode, number>
+  /** 아직 어느 배정에도 없는 의심·불량. 배정 관리 권한이 없으면 null */
+  unassignedTargets: { SUSPECT: number; DEFECT: number } | null
+  assignments: Record<StatusCode, number>
+  review: { total: number; reviewed: number; approved: number; rejected: number }
+  daily: { date: string; count: number }[]
+  mine: { openAssignments: number; unreviewed: number }
+}
+
 export interface TimeAnalysis {
   gapMinutes: number
   reviewers: {
@@ -305,6 +318,10 @@ export const api = {
   permissionHistory: () => get<{ items: PermissionHistoryItem[] }>('/admin/permissions/history').then((r) => r.items),
   /** 신규 배정의 담당자 후보 (권한에 '배정받기'가 있는 사용 중 계정) */
   listAssignees: () => get<{ items: User[] }>('/assignees').then((r) => r.items),
+
+  // ── 대시보드 ──
+  /** tz: 날짜를 나누는 기준 시간대(보는 사람의 브라우저 시간대) */
+  dashboard: (tz: string) => get<Dashboard>(`/dashboard?tz=${encodeURIComponent(tz)}`),
 
   // ── 배정 ──
   async listAssignments(p: { status?: AssignmentStatus; q?: string; mine?: boolean; page: number; pageSize: number }) {
