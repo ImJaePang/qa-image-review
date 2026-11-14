@@ -307,8 +307,9 @@ export const api = {
   listAssignees: () => get<{ items: User[] }>('/assignees').then((r) => r.items),
 
   // ── 배정 ──
-  async listAssignments(p: { status?: AssignmentStatus; q?: string; page: number; pageSize: number }) {
+  async listAssignments(p: { status?: AssignmentStatus; q?: string; mine?: boolean; page: number; pageSize: number }) {
     const qs = new URLSearchParams({ page: String(p.page), pageSize: String(p.pageSize) })
+    if (p.mine) qs.set('mine', 'true')
     if (p.status) qs.set('status', STATUS_CODE[p.status])
     if (p.q) qs.set('q', p.q)
     const r = await get<Page<ApiListItem> & { statusCounts: Record<StatusCode, number> }>(

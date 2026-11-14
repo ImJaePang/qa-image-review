@@ -35,8 +35,11 @@ test('배정 → 점검 시작 → 승인/반려 → 점검 완료 → 확인 �
   await expect(page.getByRole('row', { name: new RegExp(TITLE) })).toContainText('배정')
   await logout(page)
 
-  // ── QA: 점검 시작 ──
+  // ── QA: 내 배정에서 점검 시작 ──
   await login(page, 'qa1@example.com')
+  await page.getByRole('link', { name: '내 배정' }).click()
+  await expect(page.getByRole('heading', { name: '내 배정' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /신규 배정/ })).toHaveCount(0)
   await openAssignment(page)
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('button', { name: '점검 시작' }).click()

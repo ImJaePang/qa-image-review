@@ -18,8 +18,9 @@ import { useCan } from '@/stores/auth'
 
 const ALL = 'all'
 
-export function AssignmentListPage() {
-  const canManage = useCan('assignment.manage')
+/** mine: 「내 배정」 — 나에게 배정된 것만 보이고(요약 카드도 내 것만), 신규 배정 버튼은 없다 */
+export function AssignmentListPage({ mine = false }: { mine?: boolean } = {}) {
+  const canManage = useCan('assignment.manage') && !mine
   const [params, setParams] = useSearchParams()
   const openId = params.get('id')
   const [newOpen, setNewOpen] = useState(false)
@@ -36,11 +37,12 @@ export function AssignmentListPage() {
   }, [q])
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['assignments', 'list', { status, q: debouncedQ, page, pageSize }],
+    queryKey: ['assignments', 'list', { mine, status, q: debouncedQ, page, pageSize }],
     queryFn: () =>
       api.listAssignments({
         status: status === ALL ? undefined : (status as AssignmentStatus),
         q: debouncedQ || undefined,
+        mine,
         page,
         pageSize,
       }),
@@ -55,8 +57,8 @@ export function AssignmentListPage() {
     <div className="space-y-4">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-xl font-semibold">배정 리스트</h1>
-          <p className="text-sm text-muted-foreground">QA 담당자에게 배정된 검수 건을 확인하고 점검합니다.</p>
+          <h1 className="text-xl font-semibold">{mine ? '내 배정' : '배정 리스트'}</h1>
+          <p className="text-sm text-muted-foreground">{mine ? '나에게 배정된 검수 건입니다. 눌러서 점검을 시작하고 이미지를 검수합니다.' : 'QA 담당자에게 배정된 검수 건을 확인하고 점검합니다.'}</p>
         </div>
         {canManage && (
           <Button onClick={() => setNewOpen(true)}>
@@ -150,7 +152,7 @@ export function AssignmentListPage() {
             {!isLoading && !isError && rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                  조건에 맞는 배정이 없습니다.
+                  {mine && status === ALL && !debouncedQ ? '나에게 배정된 건이 없습니다.' : '조건에 맞는 배정이 없습니다.'}
                 </TableCell>
               </TableRow>
             )}

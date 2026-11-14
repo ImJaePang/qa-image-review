@@ -11,6 +11,7 @@ import { useAuth } from '@/stores/auth'
 
 // 화면 본문은 처음 열 때 내려받는다 (로그인·레이아웃만 첫 번들에 포함). 각 페이지는 named export라 default로 감싼다.
 const AssignmentListPage = lazy(() => import('@/pages/AssignmentListPage').then((m) => ({ default: m.AssignmentListPage })))
+const MyAssignmentsPage = lazy(() => import('@/pages/AssignmentListPage').then((m) => ({ default: () => <m.AssignmentListPage mine /> })))
 const TimeAnalysisPage = lazy(() => import('@/pages/TimeAnalysisPage').then((m) => ({ default: m.TimeAnalysisPage })))
 const IntegrationsPage = lazy(() => import('@/pages/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })))
 const RulesPage = lazy(() => import('@/pages/RulesPage').then((m) => ({ default: m.RulesPage })))
@@ -35,6 +36,7 @@ export default function App() {
             <Route path="/signup" element={<SignupPage />} />
             <Route element={<AppLayout />}>
               <Route path="/review/assignments" element={<AssignmentListPage />} />
+              <Route path="/review/my-assignments" element={<MyAssignmentsPage />} />
               <Route path="/monitoring/time" element={<TimeAnalysisPage />} />
               <Route path="/settings/integrations" element={<IntegrationsPage />} />
               <Route path="/settings/rules" element={<RulesPage />} />
