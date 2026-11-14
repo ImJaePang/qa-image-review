@@ -69,23 +69,27 @@ export default async function assignmentRoutes(app) {
           properties: {
             status: { type: 'string', enum: STATUSES },
             q: { type: 'string', maxLength: 100 },
+            // true면 나에게 배정된 것만 (「내 배정」 화면). 상태별 건수도 같은 범위로 센다
+            mine: { type: 'boolean', default: false },
             ...pagingQuery,
           },
         },
       },
     },
     async (req) => {
-      const { status = null, q = null, page, pageSize } = req.query
+      const { status = null, q = null, mine, page, pageSize } = req.query
+      const mineId = mine ? req.user.sub : null
       const like = q ? `%${q.replace(/[\\%_]/g, '\\$&')}%` : null
       const where = `($1::text IS NULL OR s.status = $1)
-        AND ($2::text IS NULL OR s.title ILIKE $2 OR s.code ILIKE $2 OR s.assignee_name ILIKE $2)`
+        AND ($2::text IS NULL OR s.title ILIKE $2 OR s.code ILIKE $2 OR s.assignee_name ILIKE $2)
+        AND ($3::bigint IS NULL OR s.id IN (SELECT a.id FROM assignments a WHERE a.assignee_id = $3))`
       const [list, total, counts] = await Promise.all([
         pool.query(
-          `SELECT ${ASSIGNMENT_COLS} FROM assignment_summary s WHERE ${where} ORDER BY s.id DESC LIMIT $3 OFFSET $4`,
-          [status, like, pageSize, (page - 1) * pageSize],
+          `SELECT ${ASSIGNMENT_COLS} FROM assignment_summary s WHERE ${where} ORDER BY s.id DESC LIMIT $4 OFFSET $5`,
+          [status, like, mineId, pageSize, (page - 1) * pageSize],
         ),
-        pool.query(`SELECT count(*) AS n FROM assignment_summary s WHERE ${where}`, [status, like]),
-        pool.query('SELECT status, count(*) AS n FROM assignments GROUP BY status'),
+        pool.query(`SELECT count(*) AS n FROM assignment_summary s WHERE ${where}`, [status, like, mineId]),
+        pool.query('SELECT status, count(*) AS n FROM assignments a WHERE ($1::bigint IS NULL OR a.assignee_id = $1) GROUP BY status', [mineId]),
       ])
       const statusCounts = Object.fromEntries(STATUSES.map((s) => [s, 0]))
       counts.rows.forEach((r) => (statusCounts[r.status] = r.n))
