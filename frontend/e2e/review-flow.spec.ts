@@ -1,6 +1,7 @@
 // 핵심 흐름: 관리자가 배정을 만들고 → QA가 점검·승인/반려 → 점검 완료 → 관리자가 확인 완료.
 // 화면·서버·DB가 실제로 맞물려 도는지 사람이 하는 순서 그대로 확인한다. (테스트 DB의 미배정 이미지: 의심 3 + 불량 3)
 import { expect, test, type Page } from '@playwright/test'
+import { freeImages } from './helpers'
 
 const TITLE = '핵심 흐름 시험 배정'
 const COUNT = 5
@@ -23,10 +24,11 @@ const openAssignment = (page: Page) => page.getByRole('row', { name: new RegExp(
 test('배정 → 점검 시작 → 승인/반려 → 점검 완료 → 확인 완료', async ({ page }) => {
   // ── 관리자: 신규 배정 ──
   await login(page, 'admin@example.com')
+  await freeImages(page)
   await page.getByRole('button', { name: /신규 배정/ }).first().click()
   const modal = page.getByRole('dialog')
   await modal.locator('#t').fill(TITLE)
-  await modal.getByRole('combobox').click()
+  await modal.getByRole('combobox').first().click()
   await page.getByRole('option', { name: '김검수' }).click()
   await modal.locator('#d').fill('2030-01-31')
   await modal.locator('#c').fill(String(COUNT))

@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Check, ChevronLeft, ChevronRight, SkipForward, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { api } from '@/api'
+import { api, type ImageFilter } from '@/api'
 import { REASON_LABELS, fmtDateTime } from '@/lib/domain'
 import { useAuth } from '@/stores/auth'
-import type { Assignment, ImageItem } from '@/lib/types'
+import type { Assignment, ImageItem, Verdict } from '@/lib/types'
+import { VIEW_ORDERS, VIEW_ORDER_LABEL, type ViewOrder } from '@/lib/imageSort'
 import { cn } from '@/lib/utils'
 import { toggleAll, type Overlay } from '@/lib/overlay'
 import { ReasonBadge, ReviewMark, VerdictBadge } from './badges'
@@ -38,6 +40,14 @@ const saveViewMode = (m: ViewMode) => {
 }
 
 const PAGE_SIZE = 50
+/** 결과 칩: 서버 filter 값과 같은 이름. 건수는 image-counts의 같은 키 */
+const RESULT_CHIPS: [ImageFilter, string][] = [
+  ['all', '전체'],
+  ['unreviewed', '미검토'],
+  ['approved', '승인'],
+  ['rejected', '반려'],
+]
+const VERDICT_OPTIONS: (Verdict | 'all')[] = ['all', '정상', '의심', '불량']
 const ROW_HEIGHT = 61
 type ImagePage = Awaited<ReturnType<typeof api.listImages>>
 
@@ -60,6 +70,20 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
     releaseFocus()
   }
   const me = useAuth((s) => s.user)
+  // 보는 목록의 조건: 결과(미검토·승인·반려), AI 판정, 정렬. 바꾸면 처음 이미지부터 본다.
+  const [filter, setFilter] = useState<ImageFilter>('all')
+  const [verdictFilter, setVerdictFilter] = useState<Verdict | 'all'>('all')
+  const [sort, setSort] = useState<ViewOrder>('position')
+  const filtersActive = filter !== 'all' || verdictFilter !== 'all'
+  const verdictParam = verdictFilter === 'all' ? undefined : verdictFilter
+  const changeView = (next: { filter?: ImageFilter; verdict?: Verdict | 'all'; sort?: ViewOrder }) => {
+    if (next.filter !== undefined) setFilter(next.filter)
+    if (next.verdict !== undefined) setVerdictFilter(next.verdict)
+    if (next.sort !== undefined) setSort(next.sort)
+    setIndex(0)
+    releaseFocus()
+  }
+  const { data: counts } = useQuery({ queryKey: ['image-counts', aid, verdictFilter], queryFn: () => api.imageCounts(aid, verdictParam) })
   const [draft, setDraft] = useState<{ id: string; text: string } | null>(null)
 
   // 가상 스크롤 목록: 전체 장수만큼 행을 잡고, 보이는 행이 속한 페이지(50장 단위)만 서버에서 불러온다.
@@ -81,8 +105,8 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
     .sort((x, y) => x - y)
   const results = useQueries({
     queries: needed.map((p) => ({
-      queryKey: ['images', aid, p],
-      queryFn: () => api.listImages(aid, { page: p, pageSize: PAGE_SIZE }),
+      queryKey: ['images', aid, filter, verdictFilter, sort, p],
+      queryFn: () => api.listImages(aid, { page: p, pageSize: PAGE_SIZE, filter, verdict: verdictParam, sort }),
       placeholderData: (prev: ImagePage | undefined) => prev,
     })),
   })
@@ -120,7 +144,7 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
 
   const goNextUnreviewed = async (afterPosition: number) => {
     try {
-      const pos = await api.nextUnreviewed(aid, afterPosition)
+      const pos = await api.nextUnreviewed(aid, afterPosition, { filter, verdict: verdictParam, sort })
       if (pos) setIndex(pos - 1)
       else toast.info('미검토 이미지가 없습니다.')
     } catch (e) {
@@ -150,7 +174,10 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
       ctx?.prev.forEach(([key, data]) => qc.setQueryData(key, data))
       toast.error(e.message)
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['assignments'] }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['assignments'] })
+      qc.invalidateQueries({ queryKey: ['image-counts', aid] }) // 결과 칩 건수. 목록은 다시 받지 않아 보던 목록이 흔들리지 않는다
+    },
   })
 
   const decide = async (status: '승인' | '반려') => {
@@ -203,13 +230,75 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
   })
 
   if (firstError && !current) return <p className="p-6 text-sm text-destructive">{firstError.message}</p>
-  if (total === 0) return <p className="p-6 text-sm text-muted-foreground">이 배정에는 이미지가 없습니다.</p>
+  const filterBar = (
+    <div className="space-y-2 border-b bg-muted/40 p-2">
+      <div className="flex overflow-hidden rounded-md border bg-card" role="group" aria-label="결과">
+        {RESULT_CHIPS.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => changeView({ filter: value })}
+            className={cn('flex flex-1 flex-col items-center border-r py-1 leading-tight last:border-r-0', filter === value ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}
+          >
+            <span className="text-[11px]">{label}</span>
+            <span className="text-xs font-semibold tabular-nums">{counts ? counts[value].toLocaleString() : '-'}</span>
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-1.5">
+        <Select
+          items={VERDICT_OPTIONS.map((v) => ({ value: v, label: v === 'all' ? '판정 전체' : v }))}
+          value={verdictFilter}
+          onValueChange={(v) => changeView({ verdict: (v ?? 'all') as Verdict | 'all' })}
+        >
+          <SelectTrigger className="w-2/5 min-w-0 text-xs" aria-label="AI 판정">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {VERDICT_OPTIONS.map((v) => (
+              <SelectItem key={v} value={v}>
+                {v === 'all' ? '판정 전체' : v}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select items={VIEW_ORDERS.map((v) => ({ value: v, label: VIEW_ORDER_LABEL[v] }))} value={sort} onValueChange={(v) => changeView({ sort: (v ?? 'position') as ViewOrder })}>
+          <SelectTrigger className="w-3/5 min-w-0 text-xs" aria-label="정렬">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {VIEW_ORDERS.map((v) => (
+              <SelectItem key={v} value={v}>
+                {VIEW_ORDER_LABEL[v]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
+
+  if (total === 0 && !filtersActive) return <p className="p-6 text-sm text-muted-foreground">이 배정에는 이미지가 없습니다.</p>
+  if (total === 0)
+    return (
+      <div className="grid h-full min-h-0 grid-cols-[280px_1fr] gap-4">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border">{filterBar}</div>
+        <div className="flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+          <p>조건에 맞는 이미지가 없습니다.</p>
+          <Button variant="outline" size="sm" onClick={() => changeView({ filter: 'all', verdict: 'all' })}>
+            필터 지우기
+          </Button>
+        </div>
+      </div>
+    )
   if (!current) return <p className="p-6 text-sm text-muted-foreground">이미지를 불러오는 중…</p>
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[220px_1fr_280px] gap-4">
-      {/* 이미지 목록 (가상 스크롤) */}
-      <div ref={listRef} className="min-h-0 overflow-auto rounded-lg border">
+    <div className="grid h-full min-h-0 grid-cols-[280px_1fr_280px] gap-4">
+      {/* 이미지 목록: 필터 줄 + 가상 스크롤 */}
+      <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border">
+        {filterBar}
+        <div ref={listRef} className="min-h-0 flex-1 overflow-auto">
         <ul className="relative" style={{ height: virt.getTotalSize() }}>
           {virtualRows.map((row) => {
             const img = itemAt(row.index)
@@ -243,6 +332,7 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
             )
           })}
         </ul>
+        </div>
       </div>
 
       {/* 뷰어 */}
@@ -353,6 +443,9 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
               <X className="size-4" /> 반려
             </Button>
           </div>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            <b className="text-foreground">승인</b> 문제없이 사용할 수 있음 · <b className="text-foreground">반려</b> 문제가 있어 사용할 수 없음. AI 판정이 불량이어도 사람이 보고 문제없다면 승인합니다.
+          </p>
           {review && review.status !== '미검토' && review.reviewedAt && (
             <p className="text-xs text-muted-foreground" data-testid="last-review">
               마지막 검수: {review.reviewerName ?? '알 수 없음'} · {fmtDateTime(review.reviewedAt)}

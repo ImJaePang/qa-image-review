@@ -1,6 +1,7 @@
 // 이미지 확대 보기와 박스 호버 설명: 박스에 올리면 한글 원인 카드가 뜨고 목록과 함께 강조되며,
 // Z로 확대 화면을 열어 확대·원본 크기·맞춤·승인까지 하고 Esc로 돌아온다.
 import { expect, test, type Page } from '@playwright/test'
+import { freeImages } from './helpers'
 
 const TITLE = '확대 보기 시험 배정'
 
@@ -16,12 +17,13 @@ const percent = async (page: Page) => Number.parseInt((await page.getByTestId('z
 
 test('박스 호버 카드와 확대 화면', async ({ page }) => {
   await loginAdmin(page)
+  await freeImages(page)
 
   // 시험용 배정 1건(의심·불량 1장)을 만들어 점검을 시작한다
   await page.getByRole('button', { name: /신규 배정/ }).first().click()
   const modal = page.getByRole('dialog')
   await modal.locator('#t').fill(TITLE)
-  await modal.getByRole('combobox').click()
+  await modal.getByRole('combobox').first().click()
   await page.getByRole('option', { name: '김검수' }).click()
   await modal.locator('#d').fill('2030-01-31')
   await modal.locator('#c').fill('1')

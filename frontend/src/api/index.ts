@@ -3,6 +3,7 @@ import type { AssignmentListItem, AssignmentStatus, ImageItem, ImageListItem, Re
 import type { TopMenu } from '@/config/menu'
 import type { BulkAction, BulkResult, UserProfile, UserStatus } from '@/lib/users'
 import { ApiError, del, get, patch, post, put } from './client'
+import type { ImageOrder, ViewOrder } from '@/lib/imageSort'
 import type { UploadFileState, UploadLimits } from '@/lib/upload'
 import {
   REVIEW_CODE,
@@ -344,21 +345,28 @@ export const api = {
     return Object.fromEntries(Object.entries(r).map(([k, v]) => [VERDICT_KO[k as VerdictCode], v])) as Record<Verdict, number>
   },
 
-  createAssignment: (input: { title: string; assigneeId: string; dueDate: string; verdicts: Verdict[]; count: number }) =>
+  createAssignment: (input: { title: string; assigneeId: string; dueDate: string; verdicts: Verdict[]; count: number; order: ImageOrder; normalPercent: number }) =>
     post<{ id: string; count: number }>('/assignments', { ...input, verdicts: input.verdicts.map((v) => VERDICT_CODE[v]) }),
 
   setStatus: (id: string, to: AssignmentStatus) => post<{ id: string }>(`/assignments/${id}/status`, { to: STATUS_CODE[to] }),
   saveNote: (id: string, note: string) => put<{ ok: true }>(`/assignments/${id}/note`, { note }),
 
   // ── 이미지 (서버 페이지네이션) ──
-  async listImages(id: string, p: { page: number; pageSize: number; filter?: ImageFilter }) {
-    const qs = new URLSearchParams({ page: String(p.page), pageSize: String(p.pageSize), filter: p.filter ?? 'all' })
+  async listImages(id: string, p: { page: number; pageSize: number; filter?: ImageFilter; verdict?: Verdict; sort?: ViewOrder }) {
+    const qs = new URLSearchParams({ page: String(p.page), pageSize: String(p.pageSize), filter: p.filter ?? 'all', sort: p.sort ?? 'position' })
+    if (p.verdict) qs.set('verdict', VERDICT_CODE[p.verdict])
     const r = await get<Page<ApiImageItem>>(`/assignments/${id}/images?${qs}`)
     return { ...r, items: r.items.map(toImageItem) as ImageItem[] }
   },
-  /** afterPosition(1부터) 다음의 첫 미검토 이미지 위치. 없으면 처음부터 다시 찾고, 전부 검토했으면 null */
-  nextUnreviewed: (id: string, afterPosition: number) =>
-    get<{ position: number | null }>(`/assignments/${id}/next-unreviewed?after=${afterPosition}`).then((r) => r.position),
+  /** 결과 칩의 건수(전체·미검토·승인·반려). 판정 필터만 반영한다 */
+  imageCounts: (id: string, verdict?: Verdict) =>
+    get<{ all: number; unreviewed: number; approved: number; rejected: number }>(`/assignments/${id}/image-counts${verdict ? `?verdict=${VERDICT_CODE[verdict]}` : ''}`),
+  /** afterPosition(1부터) 다음의 첫 미검토 이미지 위치. 지금 보는 목록(필터·판정·정렬) 기준이고, 없으면 처음부터 다시 찾고, 전부 검토했으면 null */
+  nextUnreviewed: (id: string, afterPosition: number, view?: { filter?: ImageFilter; verdict?: Verdict; sort?: ViewOrder }) => {
+    const qs = new URLSearchParams({ after: String(afterPosition), filter: view?.filter ?? 'all', sort: view?.sort ?? 'position' })
+    if (view?.verdict) qs.set('verdict', VERDICT_CODE[view.verdict])
+    return get<{ position: number | null }>(`/assignments/${id}/next-unreviewed?${qs}`).then((r) => r.position)
+  },
   // ── 모니터링 (관리자) ──
   async timeAnalysis(gapMinutes: number) {
     const r = await get<Omit<TimeAnalysis, 'assignments'> & { assignments: (Omit<TimeAnalysis['assignments'][number], 'status'> & { status: StatusCode })[] }>(
