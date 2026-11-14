@@ -69,8 +69,13 @@ export function LoginPage() {
   const login = useAuth((s) => s.login)
   const navigate = useNavigate()
   const loc = useLocation()
-  const [email, setEmail] = useState('admin@example.com')
-  const [password, setPassword] = useState('1234')
+  // 데모 모드(서버 설정)일 때만 데모 계정을 미리 채우고 안내한다. 공개 서버에서는 빈 칸으로 시작한다.
+  const { data: cfg } = useQuery({ queryKey: ['public-config'], queryFn: api.publicConfig, staleTime: Infinity })
+  const demo = cfg?.demoMode === true
+  const [typedEmail, setEmail] = useState<string | null>(null)
+  const [typedPassword, setPassword] = useState<string | null>(null)
+  const email = typedEmail ?? (demo ? 'admin@example.com' : '')
+  const password = typedPassword ?? (demo ? '1234' : '')
   const [error, setError] = useState('')
   const [expired, setExpired] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -132,9 +137,11 @@ export function LoginPage() {
             회원가입
           </Link>
         </p>
-        <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
-          데모 계정: admin@example.com(관리자) / qa1@example.com(QA) · 비밀번호 1234
-        </p>
+        {demo && (
+          <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+            데모 계정: admin@example.com(관리자) / qa1@example.com(QA) · 비밀번호 1234
+          </p>
+        )}
       </form>
     </AuthShell>
   )

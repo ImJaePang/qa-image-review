@@ -284,6 +284,8 @@ export interface Page<T> {
 
 export const api = {
   // ── 인증 ──
+  /** 로그인 전에 읽는 서버 설정. demoMode=false(공개 서버)면 로그인 화면에 데모 계정 안내·기본 입력값을 숨긴다 */
+  publicConfig: () => get<{ demoMode: boolean }>('/config'),
   me: () => get<{ user: User }>('/auth/me').then((r) => r.user),
   login: (email: string, password: string) => post<{ user: User }>('/auth/login', { email, password }).then((r) => r.user),
   // 가입은 승인 신청이다: 로그인되지 않고 승인 대기 안내만 돌려받는다
