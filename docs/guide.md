@@ -1,6 +1,6 @@
 # 사용 가이드: 지금까지 구현된 것과 사용 방법
 
-> 마지막 갱신: 2026-11-04. 설계 이유는 [design.md](design.md), 진행 현황·다음 할 일은 [../README.md](../README.md), 개념 설명은 [study-notes.md](study-notes.md).
+> 마지막 갱신: 2026-11-04. 설계 이유는 [design.md](design.md), 진행 현황·다음 할 일은 [progress.md](progress.md), 개념 설명은 [study-notes.md](study-notes.md).
 
 ## 1. 이 프로젝트가 하는 일
 
@@ -247,6 +247,6 @@ cd python && .venv/Scripts/python -m unittest test_metrics test_postprocess   # 
 
 ## 10. 아직 안 된 것
 
-README의 "다음에 이어서 할 일"이 최신이다. 배포·공개는 [deploy.md](deploy.md). 요약:
+progress.md의 "다음에 이어서 할 일"이 최신이다. 배포·공개는 [deploy.md](deploy.md). 요약:
 - 실제 모델(PatchCore)은 연결·평가까지 끝났다. 다만 이 데이터에서는 성능이 낮다(AUROC 0.683) — 개선·다른 모델 비교는 필요할 때(design.md 9장 마지막). 다국어(design.md 6장).
 - 알려진 한계: 화면 자동 테스트는 폼 5곳과 비밀번호 변경 흐름뿐, 로그인 잠금은 15분 뒤 자동 해제만 가능(관리자 수동 해제 없음, 프록시 뒤에서는 `TRUST_PROXY=true` 필요), 목 모델의 박스·점수는 가짜라 `ground_truth.jsonl`과 무관하다(실제 모델은 `python/evaluate.py`로 정답과 비교).

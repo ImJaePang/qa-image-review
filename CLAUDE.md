@@ -2,7 +2,7 @@
 
 AI 생성 이미지 QA 검수 시스템 연습 프로젝트. 사용자는 한국어로 대화한다.
 
-작업 시작 전에 읽을 것: `README.md`(진행 현황, 다음 할 일) → `docs/design.md`(설계 결정과 이유) → 필요 시 `docs/plan.md`(기획 원문).
+작업 시작 전에 읽을 것: `docs/progress.md`(진행 현황, 다음 할 일) → `docs/design.md`(설계 결정과 이유) → 필요 시 `docs/plan.md`(기획 원문). `README.md`는 공개용 소개라 진행 기록을 넣지 않는다(진행 기록은 progress.md에).
 
 화면(프론트)을 만들거나 목업을 만들 때는 `.claude/skills/design/SKILL.md`의 디자인 규칙을 따른다 (강조색·페이징·일괄 처리·모달 구성 등 합의 사항, 목업을 먼저 보여 주는 순서).
 
