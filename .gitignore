@@ -3,6 +3,7 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.production.example
 *.log
 .DS_Store
 # 업로드/생성 이미지 (연습용 데이터는 저장소에 올리지 않음)

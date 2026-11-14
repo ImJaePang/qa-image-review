@@ -1,0 +1,19 @@
+# 운영 프록시 설정. DOMAIN 환경변수(예: qa.example.com)로 HTTPS 인증서를 자동 발급·갱신한다.
+# DOMAIN=localhost 로 두면 Caddy 내장 인증서로 로컬에서 시험할 수 있다(브라우저 경고는 정상).
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+
+	# 이미지 업로드는 한 장씩 나눠 보내므로 한 요청의 크기는 파일 한 장(최대 50MB)이면 충분하다
+	request_body {
+		max_size 60MB
+	}
+
+	reverse_proxy app:3000
+}

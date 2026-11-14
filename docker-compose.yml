@@ -7,7 +7,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # 이 PC에서만 접속된다(127.0.0.1). 서버에서도 DB가 인터넷에 열리지 않는 것이 기본값이다
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       # 데이터 디렉터리가 비어 있는 최초 기동 때만 실행된다 (스키마 변경 시: docker compose down -v)
@@ -49,7 +50,8 @@ services:
     volumes:
       - appdata:/data/images
     ports:
-      - "${APP_PORT:-8080}:3000"
+      # 기본은 이 PC에서만(127.0.0.1). 같은 망의 다른 PC에서 열어 보려면 APP_BIND=0.0.0.0. 운영은 docker-compose.prod.yml의 caddy가 앞에서 받는다
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:3000"
     restart: unless-stopped
 
   worker:
