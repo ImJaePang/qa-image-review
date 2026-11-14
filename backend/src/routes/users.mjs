@@ -10,6 +10,7 @@ import { httpError } from '../errors.mjs'
 import { pagingQuery } from '../paging.mjs'
 import { txWith } from '../tx.mjs'
 import { requirePermission } from '../permissions.mjs'
+import { mailEnabled, maskEmail, sendMail, tempPasswordMail } from '../mail.mjs'
 
 export const BULK_MAX = 100
 const EFF = EFFECTIVE_STATUS_SQL('u')
@@ -252,16 +253,23 @@ export default async function userAdminRoutes(app) {
     },
   )
 
-  // 임시 비밀번호: 새로 만들어 한 번만 돌려준다 (화면에서 복사해 전달). 이메일 발송은 추후 과제.
+  // 임시 비밀번호: 새로 만들고 계정을 '비밀번호 변경 필요' 상태로 둔다.
+  //  - 메일이 켜져 있으면 사용자 메일로만 보낸다 (관리자에게는 보여 주지 않는다). 발송이 실패하면 변경도 취소한다.
+  //  - 꺼져 있으면 한 번만 응답으로 돌려준다 (화면에서 복사해 전달).
   app.post('/admin/users/:id/reset-password', { schema: { params: idParams } }, async (req) => {
     const { id } = req.params
-    await loadOne(pool, id)
+    const user = await loadOne(pool, id)
     const alphabet = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789' // 헷갈리는 글자(l, I, 0, O, 1) 제외
     const temp = Array.from({ length: 10 }, () => alphabet[randomInt(alphabet.length)]).join('')
+    const viaMail = mailEnabled()
     await txWith(pool, async (client) => {
-      await client.query(`UPDATE users SET password_hash = crypt($2, gen_salt('bf')) WHERE id = $1`, [id, temp])
-      await history(client, id, 'PASSWORD_RESET', {}, req.user.sub)
+      await client.query(`UPDATE users SET password_hash = crypt($2, gen_salt('bf')), must_change_password = true WHERE id = $1`, [id, temp])
+      await history(client, id, 'PASSWORD_RESET', { via: viaMail ? 'EMAIL' : 'SCREEN' }, req.user.sub)
+      if (viaMail) {
+        const m = tempPasswordMail(user.name, temp)
+        await sendMail(pool, { kind: 'TEMP_PASSWORD', userId: id, to: user.email, ...m, actorId: req.user.sub }) // 실패하면 던져서 위 변경을 되돌린다
+      }
     })
-    return { tempPassword: temp }
+    return viaMail ? { sent: true, to: maskEmail(user.email) } : { tempPassword: temp }
   })
 }

@@ -5,4 +5,4 @@ import { purgeOldFailures } from './loginGuard.mjs'
 
 await purgeOldFailures(pool) // 오래된 로그인 실패 기록 정리
 const app = await buildApp({ logger: true })
-await app.listen({ port: config.port, host: '127.0.0.1' })
+await app.listen({ port: config.port, host: config.host })

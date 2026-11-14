@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import jwt from '@fastify/jwt'
+import fastifyStatic from '@fastify/static'
 import { config } from './config.mjs'
 import { pool } from './db.mjs'
 import { httpError } from './errors.mjs'
@@ -19,7 +20,7 @@ import ruleRoutes from './routes/rules.mjs'
 import userAdminRoutes from './routes/users.mjs'
 
 export async function buildApp(opts = {}) {
-  const app = Fastify({ logger: opts.logger ?? false })
+  const app = Fastify({ logger: opts.logger ?? false, trustProxy: config.trustProxy })
 
   await app.register(cookie)
   // 토큰은 httpOnly 쿠키로 전달 (<img> 요청에도 자동으로 따라가도록). Authorization: Bearer 도 허용.
@@ -37,8 +38,12 @@ export async function buildApp(opts = {}) {
     } catch {
       throw httpError(401, '로그인이 필요합니다.')
     }
-    const { rows } = await pool.query('SELECT role, name, status, expires_at FROM users WHERE id = $1', [request.user.sub])
+    const { rows } = await pool.query('SELECT role, name, status, expires_at, must_change_password FROM users WHERE id = $1', [request.user.sub])
     if (!rows.length || !isUsable(rows[0])) throw httpError(401, '로그인이 필요합니다.')
+    // 임시 비밀번호로 로그인한 계정은 비밀번호를 바꾸기 전까지 허용된 경로(config.allowMustChange: 내 정보, 비밀번호 변경)만 쓸 수 있다
+    if (rows[0].must_change_password && !request.routeOptions?.config?.allowMustChange) {
+      throw httpError(403, '비밀번호를 먼저 변경해 주세요.', 'MUST_CHANGE_PASSWORD')
+    }
     request.user.role = rows[0].role
     request.user.name = rows[0].name
     request.user.permissions = await loadPermissions(pool, rows[0].role) // 권한 코드는 DB의 현재 값
@@ -69,6 +74,15 @@ export async function buildApp(opts = {}) {
   await app.register(roleAdminRoutes, { prefix: '/api' })
   await app.register(uploadRoutes, { prefix: '/api' })
   await app.register(fileRoutes, { prefix: '/api' })
+
+  // 빌드한 화면 서빙 (FRONTEND_DIST). 파일이 없는 경로는 화면 라우터가 처리하도록 index.html을 주고, /api 는 기존처럼 JSON 404.
+  if (config.frontendDist) {
+    await app.register(fastifyStatic, { root: config.frontendDist, wildcard: false })
+    app.setNotFoundHandler((request, reply) => {
+      if (request.url.startsWith('/api/') || request.method !== 'GET') return reply.code(404).send({ message: '찾을 수 없습니다.' })
+      return reply.sendFile('index.html')
+    })
+  }
 
   app.addHook('onClose', async () => {
     await pool.end()

@@ -6,6 +6,9 @@ import { txWith } from '../tx.mjs'
 import { loadPermissions } from '../permissions.mjs'
 import { assertNotLocked, clearFailures, recordFailure } from '../loginGuard.mjs'
 
+// 비밀번호 변경 시 최소 길이 (가입 화면의 데모 계정 비밀번호는 기존 그대로 두고, 새로 정하는 비밀번호부터 적용)
+export const MIN_PASSWORD = 8
+
 const toUser = (r) => ({ id: String(r.id), name: r.name, email: r.email, role: r.role })
 
 export default async function authRoutes(app) {
@@ -14,7 +17,7 @@ export default async function authRoutes(app) {
     reply.setCookie('token', token, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: config.isProd,
+      secure: config.cookieSecure,
       path: '/',
       maxAge: 12 * 3600,
     })
@@ -35,7 +38,7 @@ export default async function authRoutes(app) {
       const { email, password } = req.body
       await assertNotLocked(pool, email, req.ip) // 잠겨 있으면 비밀번호를 검사하지 않는다
       const { rows } = await pool.query(
-        'SELECT id, name, email, role, status, expires_at FROM users WHERE lower(email) = lower($1) AND password_hash = crypt($2, password_hash)',
+        'SELECT id, name, email, role, status, expires_at, must_change_password FROM users WHERE lower(email) = lower($1) AND password_hash = crypt($2, password_hash)',
         [email, password],
       )
       if (!rows.length) {
@@ -56,7 +59,7 @@ export default async function authRoutes(app) {
       await pool.query(`UPDATE users SET last_login_at = now(), expires_at = now() + make_interval(years => $2) WHERE id = $1`, [rows[0].id, EXPIRY_YEARS])
       const user = toUser(rows[0])
       setToken(reply, user)
-      return { user: { ...user, permissions: [...(await loadPermissions(pool, user.role))].sort() } }
+      return { user: { ...user, mustChangePassword: rows[0].must_change_password, permissions: [...(await loadPermissions(pool, user.role))].sort() } }
     },
   )
 
@@ -152,11 +155,46 @@ export default async function authRoutes(app) {
     return { ok: true }
   })
 
-  app.get('/auth/me', { onRequest: app.authenticate }, async (req) => {
-    const { rows } = await pool.query('SELECT id, name, email, role FROM users WHERE id = $1', [req.user.sub])
+  app.get('/auth/me', { onRequest: app.authenticate, config: { allowMustChange: true } }, async (req) => {
+    const { rows } = await pool.query('SELECT id, name, email, role, must_change_password FROM users WHERE id = $1', [req.user.sub])
     if (!rows.length) throw httpError(401, '로그인이 필요합니다.')
-    return { user: { ...toUser(rows[0]), permissions: [...req.user.permissions].sort() } }
+    return { user: { ...toUser(rows[0]), mustChangePassword: rows[0].must_change_password, permissions: [...req.user.permissions].sort() } }
   })
+
+  // 비밀번호 변경 (본인). 임시 비밀번호로 로그인한 직후에도 이 경로는 쓸 수 있다.
+  //  - 현재 비밀번호를 다시 확인하며, 틀리면 로그인과 같은 횟수 제한에 센다. 틀린 경우 401이 아니라 400을 쓴다(401은 화면이 로그아웃 처리하는 신호).
+  app.post(
+    '/auth/change-password',
+    {
+      onRequest: app.authenticate,
+      config: { allowMustChange: true },
+      schema: {
+        body: {
+          type: 'object',
+          required: ['currentPassword', 'newPassword'],
+          properties: { currentPassword: { type: 'string', maxLength: 200 }, newPassword: { type: 'string', minLength: MIN_PASSWORD, maxLength: 200 } },
+        },
+      },
+    },
+    async (req) => {
+      const { currentPassword, newPassword } = req.body
+      const id = req.user.sub
+      const { rows } = await pool.query('SELECT email FROM users WHERE id = $1', [id])
+      await assertNotLocked(pool, rows[0].email, req.ip)
+      const ok = await pool.query('SELECT 1 FROM users WHERE id = $1 AND password_hash = crypt($2, password_hash)', [id, currentPassword])
+      if (!ok.rowCount) {
+        await recordFailure(pool, rows[0].email, req.ip)
+        throw httpError(400, '현재 비밀번호가 올바르지 않습니다.', 'WRONG_PASSWORD')
+      }
+      if (newPassword === currentPassword) throw httpError(400, '새 비밀번호는 현재 비밀번호와 달라야 합니다.', 'SAME_PASSWORD')
+      await txWith(pool, async (client) => {
+        await client.query(`UPDATE users SET password_hash = crypt($2, gen_salt('bf')), must_change_password = false WHERE id = $1`, [id, newPassword])
+        await client.query(`INSERT INTO user_history (user_id, action) VALUES ($1, 'PASSWORD_CHANGE')`, [id])
+      })
+      await clearFailures(pool, rows[0].email)
+      return { ok: true }
+    },
+  )
 
   // 담당자 선택용 사용자 목록 (사용 중인 계정만)
   app.get('/users', { onRequest: app.authenticate }, async () => {
