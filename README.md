@@ -74,7 +74,9 @@ npm run dev
 
 25. [x] 배포 준비: `Dockerfile`(화면 빌드+API 한 이미지), `docker-compose.yml`의 `app`·`worker`(프로필 `app`), 시작 시 마이그레이션·데모 데이터 자동 준비(`backend/scripts/docker-start.mjs`), API 서버의 화면 서빙(`FRONTEND_DIST`), `HOST`·`TRUST_PROXY`·`COOKIE_SECURE` 설정, `LICENSE`(MIT), [docs/deploy.md](docs/deploy.md). 전체 스택을 격리 환경에서 띄워 로그인·파일 API·워커까지 확인.
 
-남은 후보(필요할 때): 공개용 데모 정리(로그인 화면의 데모 계정 안내·기본 입력값, 데모 배정 미리 만들기), 포트폴리오용 화면 캡처·README 소개, 로그인·검수 핵심 흐름 E2E, 모델 개선·다른 모델 비교(평가 도구 있음), 다국어(design.md 6장).
+26. [x] 공개용 데모 정리: `DEMO_MODE`(기본: 운영 모드가 아니면 켬, compose는 켬). 켜면 로그인 화면에 데모 계정 안내·기본 입력값을 보이고 시작 시 데모 배정 1건(qa1, 의심·불량 40장)을 만든다. 끄면(공개 서버) 빈 칸으로 시작하고 안내·배정 없음. 화면은 로그인 전 `GET /api/config`로 읽는다. 두 모드를 Docker로 확인.
+
+남은 후보(필요할 때): 포트폴리오용 화면 캡처·README 소개, 공개 서버용 시드 계정 비밀번호 변경 절차 자동화, 로그인·검수 핵심 흐름 E2E, 모델 개선·다른 모델 비교(평가 도구 있음), 다국어(design.md 6장).
 
 ### 점검 메모 (2026-11-04)
 전체 점검 결과(2026-11-04 시점, 현재 개수는 아래 테스트 절): 백엔드 테스트 208개·프론트 50개·파이썬 17개 모두 통과, `tsc -b`·`vite build` 성공. 정리할 작은 항목:
@@ -118,7 +120,7 @@ cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api는 API
 
 ## 테스트
 ```
-cd backend && npm test      # 백엔드 테스트 225개 (API 통합, 사용자·권한·메뉴, 업로드, 수신·워커, 마이그레이션, 모델 계약·어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
+cd backend && npm test      # 백엔드 테스트 227개 (API 통합, 사용자·권한·메뉴, 업로드, 수신·워커, 마이그레이션, 모델 계약·어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
 cd frontend && npm test     # 단위 테스트 52개 (영문 코드↔한글 매핑, 페이징, 사용자·권한 문구, 업로드 전송 큐 등)
 cd frontend && npx tsc -b   # 타입 체크
 cd python && .venv/Scripts/python -m unittest test_metrics test_postprocess   # 파이썬 단위 테스트 17개 (모델 없이 실행)
