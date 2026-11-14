@@ -12,11 +12,12 @@ import { REASON_LABELS, fmtDateTime } from '@/lib/domain'
 import { useAuth } from '@/stores/auth'
 import type { Assignment, ImageItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { toggleAll, type Overlay } from '@/lib/overlay'
 import { ReasonBadge, ReviewMark, VerdictBadge } from './badges'
+import { NumberBadge } from './BoxLayer'
+import { ImageLightbox } from './ImageLightbox'
+import { ImageViewer, type ViewMode } from './ImageViewer'
 
-type Overlay = 'both' | 'heatmap' | 'boxes' | 'off'
-/** 보기 모드: 미리보기(줄인 사본, 기본) / 원본 고정. 판정은 어느 모드든 원본 기준이고, 박스 좌표도 원본 픽셀 기준이다 */
-type ViewMode = 'preview' | 'original'
 const VIEW_MODE_KEY = 'qa.reviewViewMode'
 const PREFETCH_AHEAD = 2 // 원본 고정일 때 현재 이미지 뒤로 미리 받을 장수 (전체를 받지 않는다)
 
@@ -40,47 +41,6 @@ const PAGE_SIZE = 50
 const ROW_HEIGHT = 61
 type ImagePage = Awaited<ReturnType<typeof api.listImages>>
 
-function ImageViewer({ img, overlay, opacity, viewMode }: { img: ImageItem; overlay: Overlay; opacity: number; viewMode: ViewMode }) {
-  const showHeat = !!img.heatmapUrl && (overlay === 'both' || overlay === 'heatmap')
-  const showBoxes = overlay === 'both' || overlay === 'boxes'
-  return (
-    <div className="relative mx-auto aspect-video w-full overflow-hidden rounded-lg border bg-black">
-      {/* 미리보기는 항상 깔아 두고, 원본 고정이면 그 위에 원본을 얹는다 (원본이 내려오는 동안에도 빈 화면이 없다) */}
-      <img src={img.previewUrl} alt={img.fileName} className="absolute inset-0 size-full object-fill" draggable={false} />
-      {viewMode === 'original' && (
-        <img key={img.imageId} src={img.originalUrl} alt="" className="absolute inset-0 size-full object-fill" draggable={false} />
-      )}
-      {showHeat && (
-        <img
-          src={img.heatmapUrl}
-          alt=""
-          className="absolute inset-0 size-full object-fill mix-blend-normal"
-          style={{ opacity: opacity / 100 }}
-          draggable={false}
-        />
-      )}
-      {showBoxes &&
-        img.boxes.map((b, i) => (
-          // 박스 좌표는 원본 픽셀 기준으로 저장 → 화면에서는 비율(%)로 변환 (기획서 5장)
-          <div
-            key={i}
-            className="absolute border-2 border-red-500 shadow-[0_0_0_1px_rgba(0,0,0,0.5)]"
-            style={{
-              left: `${(b.x / img.width) * 100}%`,
-              top: `${(b.y / img.height) * 100}%`,
-              width: `${(b.width / img.width) * 100}%`,
-              height: `${(b.height / img.height) * 100}%`,
-            }}
-          >
-            <span className="absolute -top-5 left-0 whitespace-nowrap rounded-sm bg-red-500 px-1 text-[10px] font-medium leading-4 text-white">
-              {b.reasonCode} {b.score.toFixed(2)}
-            </span>
-          </div>
-        ))}
-    </div>
-  )
-}
-
 export function ImageReviewPanel({ assignment, canReview }: { assignment: Assignment; canReview: boolean }) {
   const qc = useQueryClient()
   const aid = assignment.id
@@ -89,6 +49,8 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
   const [index, setIndex] = useState(0)
   const [overlay, setOverlay] = useState<Overlay>('both')
   const [opacity, setOpacity] = useState(60)
+  const [hot, setHot] = useState<number | null>(null) // 마우스를 올린 이상 영역 번호 (박스와 오른쪽 목록이 함께 강조)
+  const [zoomOpen, setZoomOpen] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
   // 토글을 클릭하면 버튼이 포커스를 가져가 ←/→ 키를 토글 그룹이 먹어 버린다 → 바꾼 뒤 포커스를 풀어 이미지 이동 단축키가 계속 동작하게 한다
   const releaseFocus = () => (document.activeElement as HTMLElement | null)?.blur?.()
@@ -215,11 +177,14 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
       if (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT') return
-      if (e.key === 'ArrowRight') setIndex((i) => Math.min(i + 1, total - 1))
+      if (zoomOpen) return // 확대 화면이 단축키를 받는다
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.key.toLowerCase() === 'z') setZoomOpen(true)
+      else if (e.key === 'ArrowRight') setIndex((i) => Math.min(i + 1, total - 1))
       else if (e.key === 'ArrowLeft') setIndex((i) => Math.max(i - 1, 0))
       else if (e.key.toLowerCase() === 'a') decide('승인')
       else if (e.key.toLowerCase() === 'r') decide('반려')
-      else if (e.key.toLowerCase() === 'h') setOverlay((o) => (o === 'both' ? 'off' : 'both'))
+      else if (e.key.toLowerCase() === 'h') setOverlay(toggleAll)
       else if (e.key.toLowerCase() === 'o') changeViewMode(viewMode === 'original' ? 'preview' : 'original')
     }
     window.addEventListener('keydown', onKey)
@@ -313,12 +278,13 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
             </Button>
           </div>
         </div>
-        <ImageViewer img={current} overlay={overlay} opacity={opacity} viewMode={viewMode} />
+        <ImageViewer img={current} overlay={overlay} opacity={opacity} viewMode={viewMode} hot={hot} onHot={setHot} onExpand={() => setZoomOpen(true)} />
         <p className="text-xs text-muted-foreground">
           단축키: <kbd className="rounded border px-1">←</kbd> <kbd className="rounded border px-1">→</kbd> 이동 ·{' '}
           <kbd className="rounded border px-1">A</kbd> 승인 · <kbd className="rounded border px-1">R</kbd> 반려 ·{' '}
           <kbd className="rounded border px-1">H</kbd> 오버레이 토글 ·{' '}
-          <kbd className="rounded border px-1">O</kbd> 원본/미리보기
+          <kbd className="rounded border px-1">O</kbd> 원본/미리보기 ·{' '}
+          <kbd className="rounded border px-1">Z</kbd> 크게 보기
         </p>
       </div>
 
@@ -339,12 +305,20 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
           <p className="text-xs font-semibold">이상 영역 ({current.boxes.length})</p>
           {current.boxes.length === 0 && <p className="text-xs text-muted-foreground">감지된 이상 영역 없음</p>}
           {current.boxes.map((b, i) => (
-            <div key={i} className="space-y-1 rounded-md bg-muted/60 p-2 text-xs">
-              <div className="flex items-center justify-between">
-                <ReasonBadge code={b.reasonCode} />
+            <div
+              key={i}
+              onPointerEnter={() => setHot(i)}
+              onPointerLeave={() => setHot(null)}
+              className={cn('space-y-1 rounded-md p-2 text-xs transition-colors', hot === i ? 'bg-accent' : 'bg-muted/60')}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <NumberBadge n={i + 1} />
+                  <span className="text-[13px] font-medium">{REASON_LABELS[b.reasonCode]}</span>
+                </span>
                 <span className="tabular-nums">{b.score.toFixed(2)}</span>
               </div>
-              <p className="text-muted-foreground">{REASON_LABELS[b.reasonCode]}</p>
+              <ReasonBadge code={b.reasonCode} />
             </div>
           ))}
         </div>
@@ -376,6 +350,23 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
           {!canReview && <p className="text-xs text-muted-foreground">‘점검중’ 상태에서 담당자만 검수할 수 있습니다.</p>}
         </div>
       </div>
+
+      <ImageLightbox
+        open={zoomOpen}
+        onClose={() => setZoomOpen(false)}
+        img={current}
+        overlay={overlay}
+        setOverlay={setOverlay}
+        opacity={opacity}
+        hot={hot}
+        onHot={setHot}
+        index={index}
+        total={total}
+        onPrev={() => setIndex((i) => Math.max(i - 1, 0))}
+        onNext={() => setIndex((i) => Math.min(i + 1, total - 1))}
+        canReview={canReview}
+        onDecide={decide}
+      />
     </div>
   )
 }

@@ -23,6 +23,17 @@ export const REASON_LABELS: Record<ReasonCode, string> = {
   UNKNOWN: '원인 미분류',
 }
 
+/** 이상 영역 호버 카드에 보여 주는 한 줄 설명. 이름(REASON_LABELS)과 같은 키. 값이 아니라 문구라서 화면 파일에 둔다 */
+export const REASON_DESCRIPTIONS: Record<ReasonCode, string> = {
+  COMPOSITE_EDGE: '합성한 부분의 경계가 부자연스럽게 보입니다. 윤곽이 번지거나 배경과 이어지지 않을 수 있습니다.',
+  SHAPE_DISTORTION: '형태나 구조가 일그러져 보입니다. 곧아야 할 부분이 휘었거나 모양이 비정상일 수 있습니다.',
+  LIGHTING_MISMATCH: '이 부분의 빛 방향이나 그림자가 주변과 맞지 않습니다.',
+  TEXTURE_ANOMALY: '표면 질감이 주변과 다르게 보입니다. 뭉개졌거나 같은 무늬가 반복될 수 있습니다.',
+  SCALE_ANOMALY: '주변 물체에 비해 크기나 비율이 어색해 보입니다.',
+  PART_COUNT_MISMATCH: '같은 종류의 장비와 비교해 바퀴나 포신 같은 부품 수가 맞지 않을 수 있습니다.',
+  UNKNOWN: 'AI가 이상 가능성은 찾았지만 원인을 분류하지 못했습니다. 직접 확인이 필요합니다.',
+}
+
 export function fmtDate(iso: string) {
   return iso.slice(0, 10)
 }
