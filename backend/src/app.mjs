@@ -20,6 +20,7 @@ import ruleRoutes from './routes/rules.mjs'
 import userAdminRoutes from './routes/users.mjs'
 import historyRoutes from './routes/history.mjs'
 import imageListRoutes from './routes/imageList.mjs'
+import dashboardRoutes from './routes/dashboard.mjs'
 
 export async function buildApp(opts = {}) {
   const app = Fastify({ logger: opts.logger ?? false, trustProxy: config.trustProxy })
@@ -73,6 +74,7 @@ export async function buildApp(opts = {}) {
   await app.register(imageRoutes, { prefix: '/api' })
   await app.register(historyRoutes, { prefix: '/api' })
   await app.register(imageListRoutes, { prefix: '/api' })
+  await app.register(dashboardRoutes, { prefix: '/api' })
   await app.register(monitoringRoutes, { prefix: '/api' })
   await app.register(integrationRoutes, { prefix: '/api' })
   await app.register(ruleRoutes, { prefix: '/api' })
