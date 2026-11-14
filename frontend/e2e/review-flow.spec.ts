@@ -53,6 +53,13 @@ test('배정 → 점검 시작 → 승인/반려 → 점검 완료 → 확인 �
   const reviewTab = dialog.getByRole('tab', { name: /이미지 검수/ })
   await reviewTab.click()
   await expect(reviewTab).toContainText(`(0/${COUNT})`)
+  // 방향키로 이미지를 넘긴다 (탭 버튼에 포커스가 있어도 동작해야 한다)
+  // 이미지 이동 줄은 '이전' '다음' 버튼 사이에 'n / 5'가 있는 한 줄이다
+  const position = (n: number) => dialog.locator('div', { hasText: new RegExp(String.raw`${n} / ${COUNT}`) }).filter({ has: page.getByLabel('다음') }).last()
+  await page.keyboard.press('ArrowRight')
+  await expect(position(2)).toBeVisible()
+  await page.keyboard.press('ArrowLeft')
+  await expect(position(1)).toBeVisible()
   const keys = ['a', 'a', 'r', 'a', 'r']
   for (const [i, key] of keys.entries()) {
     await page.keyboard.press(key)

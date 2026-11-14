@@ -24,6 +24,8 @@ interface Props {
   onNext: () => void
   canReview: boolean
   onDecide: (status: '승인' | '반려') => void
+  /** 보기 전용(이미지 목록): 검수 상태와 승인/반려 버튼을 숨긴다 */
+  browse?: boolean
 }
 
 /** 이미지를 화면 가득 크게 본다: 휠 확대, 드래그 이동, 더블클릭 맞춤/2배, 원본 크기(1:1). 그 자리에서 승인/반려까지 한다. */
@@ -44,7 +46,7 @@ export function ImageLightbox(props: Props) {
   )
 }
 
-function LightboxBody({ onClose, img, overlay, setOverlay, opacity, hot, onHot, index, total, onPrev, onNext, canReview, onDecide }: Props) {
+function LightboxBody({ onClose, img, overlay, setOverlay, opacity, hot, onHot, index, total, onPrev, onNext, canReview, onDecide, browse }: Props) {
   const stageRef = useRef<HTMLDivElement>(null)
   const [stage, setStage] = useState({ w: 0, h: 0 })
   const [view, setView] = useState<View>(FIT)
@@ -99,13 +101,15 @@ function LightboxBody({ onClose, img, overlay, setOverlay, opacity, hot, onHot, 
       else if (k === 'arrowright') onNext()
       else if (k === 'arrowleft') onPrev()
       else if (k === 'a' || k === 'r') {
-        if (canReview) onDecide(k === 'a' ? '승인' : '반려')
+        if (canReview && !browse) onDecide(k === 'a' ? '승인' : '반려')
       }
       else return
       e.preventDefault()
+      e.stopPropagation()
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    // 캡처 단계에서 받는다: 모달 안의 포커스된 버튼·포커스 관리가 방향키를 먼저 가져가도 이 창의 단축키는 동작해야 한다
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   })
 
   const centerOf = (e: { clientX: number; clientY: number }) => {
@@ -121,7 +125,7 @@ function LightboxBody({ onClose, img, overlay, setOverlay, opacity, hot, onHot, 
         <span className="text-xs tabular-nums text-neutral-400">
           AI 점수 {img.overallScore.toFixed(2)} · {img.width}×{img.height} · {img.modelVersion}
         </span>
-        <ReviewMark status={img.review.status} />
+        {!browse && <ReviewMark status={img.review.status} />}
         <span className="flex-1" />
         <span className="text-xs tabular-nums text-neutral-400">
           {index + 1} / {total}
@@ -211,13 +215,17 @@ function LightboxBody({ onClose, img, overlay, setOverlay, opacity, hot, onHot, 
           </DarkButton>
         )}
         <span className="flex-1" />
-        {!canReview && <span className="text-xs text-neutral-400">‘점검중’ 상태에서 담당자만 검수할 수 있습니다.</span>}
-        <Button variant="destructive" size="sm" disabled={!canReview} onClick={() => onDecide('반려')}>
-          <X className="size-4" /> 반려 <Kbd>R</Kbd>
-        </Button>
-        <Button size="sm" disabled={!canReview} onClick={() => onDecide('승인')}>
-          <Check className="size-4" /> 승인 <Kbd>A</Kbd>
-        </Button>
+        {!browse && !canReview && <span className="text-xs text-neutral-400">‘점검중’ 상태에서 담당자만 검수할 수 있습니다.</span>}
+        {!browse && (
+          <>
+            <Button variant="destructive" size="sm" disabled={!canReview} onClick={() => onDecide('반려')}>
+              <X className="size-4" /> 반려 <Kbd>R</Kbd>
+            </Button>
+            <Button size="sm" disabled={!canReview} onClick={() => onDecide('승인')}>
+              <Check className="size-4" /> 승인 <Kbd>A</Kbd>
+            </Button>
+          </>
+        )}
       </div>
     </>
   )

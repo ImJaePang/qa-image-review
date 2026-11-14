@@ -187,8 +187,19 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
       else if (e.key.toLowerCase() === 'h') setOverlay(toggleAll)
       else if (e.key.toLowerCase() === 'o') changeViewMode(viewMode === 'original' ? 'preview' : 'original')
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    // 캡처 단계에서 받고, 방향키는 다른 곳으로 넘기지 않는다: 포커스가 탭 버튼에 있으면 탭 컴포넌트가 ←/→를 가져가 이미지 이동이 안 되기 때문
+    const onKeyCapture = (e: KeyboardEvent) => {
+      onKey(e)
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        const t = e.target as HTMLElement
+        if (t.tagName !== 'TEXTAREA' && t.tagName !== 'INPUT' && !zoomOpen && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault()
+          e.stopPropagation()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyCapture, true)
+    return () => window.removeEventListener('keydown', onKeyCapture, true)
   })
 
   if (firstError && !current) return <p className="p-6 text-sm text-destructive">{firstError.message}</p>

@@ -13,6 +13,7 @@ import { useAuth } from '@/stores/auth'
 const AssignmentListPage = lazy(() => import('@/pages/AssignmentListPage').then((m) => ({ default: m.AssignmentListPage })))
 const MyAssignmentsPage = lazy(() => import('@/pages/AssignmentListPage').then((m) => ({ default: () => <m.AssignmentListPage mine /> })))
 const HistoryPage = lazy(() => import('@/pages/HistoryPage').then((m) => ({ default: m.HistoryPage })))
+const ImagesPage = lazy(() => import('@/pages/ImagesPage').then((m) => ({ default: m.ImagesPage })))
 const TimeAnalysisPage = lazy(() => import('@/pages/TimeAnalysisPage').then((m) => ({ default: m.TimeAnalysisPage })))
 const IntegrationsPage = lazy(() => import('@/pages/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })))
 const RulesPage = lazy(() => import('@/pages/RulesPage').then((m) => ({ default: m.RulesPage })))
@@ -39,6 +40,7 @@ export default function App() {
               <Route path="/review/assignments" element={<AssignmentListPage />} />
               <Route path="/review/my-assignments" element={<MyAssignmentsPage />} />
               <Route path="/review/history" element={<HistoryPage />} />
+              <Route path="/data/images" element={<ImagesPage />} />
               <Route path="/monitoring/time" element={<TimeAnalysisPage />} />
               <Route path="/settings/integrations" element={<IntegrationsPage />} />
               <Route path="/settings/rules" element={<RulesPage />} />

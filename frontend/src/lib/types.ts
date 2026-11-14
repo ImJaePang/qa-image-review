@@ -54,6 +54,21 @@ export interface ImageItem extends ImageResult {
   review: ImageReview
 }
 
+/** 이미지 목록 한 줄 (데이터 > 이미지 > 이미지 목록) */
+export interface ImageListItem {
+  imageKey: string
+  fileName: string
+  width: number
+  height: number
+  receivedAt: string
+  overallScore: number
+  verdict: Verdict
+  /** 가장 최근에 담긴 배정 번호. 아직 어느 배정에도 없으면 null */
+  assignmentId: string | null
+  assignmentStatus: AssignmentStatus | null
+  thumbUrl: string
+}
+
 /** 점검 이력 한 줄: 검수(승인/반려) 한 번. 번복하면 새 줄이 쌓이고 이전 줄은 isCurrent=false */
 export interface ReviewHistoryItem {
   id: string

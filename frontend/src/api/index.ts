@@ -1,5 +1,5 @@
 // 백엔드 API 호출. 화면 코드는 한글 값만 다루고, 변환은 mappers에서 한다.
-import type { AssignmentListItem, AssignmentStatus, ImageItem, ReviewHistoryItem, Role, SignupRole, User, Verdict } from '@/lib/types'
+import type { AssignmentListItem, AssignmentStatus, ImageItem, ImageListItem, ReviewHistoryItem, Role, SignupRole, User, Verdict } from '@/lib/types'
 import type { TopMenu } from '@/config/menu'
 import type { BulkAction, BulkResult, UserProfile, UserStatus } from '@/lib/users'
 import { ApiError, del, get, patch, post, put } from './client'
@@ -425,6 +425,26 @@ export const api = {
   rejudge: (id: string, scope: 'unassigned' | 'all') => post<RejudgeResult>(`/rules/${id}/rejudge`, { scope }),
   ruleHistory: () => get<{ items: RuleHistoryItem[] }>('/rules/history').then((r) => r.items),
 
+  /** 이미지 목록: 수신 완료된 이미지를 판정·배정 여부·검색·정렬로 찾는다 */
+  async listImageCatalog(p: { verdict?: Verdict; assigned: 'all' | 'unassigned' | 'assigned'; q?: string; sort: 'newest' | 'score_asc' | 'score_desc'; page: number; pageSize: number }) {
+    const qs = new URLSearchParams({ assigned: p.assigned, sort: p.sort, page: String(p.page), pageSize: String(p.pageSize) })
+    if (p.verdict) qs.set('verdict', VERDICT_CODE[p.verdict])
+    if (p.q) qs.set('q', p.q)
+    const r = await get<{
+      items: (Omit<ImageListItem, 'verdict' | 'assignmentStatus'> & { verdict: VerdictCode; assignmentStatus: StatusCode | null })[]
+      total: number
+      page: number
+      pageSize: number
+      verdictCounts: Record<VerdictCode, number>
+    }>(`/image-list?${qs}`)
+    return {
+      ...r,
+      items: r.items.map((i): ImageListItem => ({ ...i, verdict: VERDICT_KO[i.verdict], assignmentStatus: i.assignmentStatus ? STATUS_KO[i.assignmentStatus] : null })),
+      verdictCounts: Object.fromEntries(Object.entries(r.verdictCounts).map(([k, v]) => [VERDICT_KO[k as VerdictCode], v])) as Record<Verdict, number>,
+    }
+  },
+  /** 한 장의 상세(박스·히트맵): 확대 보기용. 검수 정보는 항상 미검토 */
+  getImageDetail: (imageKey: string) => get<ApiImageItem>(`/image-list/${imageKey}`).then(toImageItem),
   /** 점검 이력: 검수 기록 목록. scope=all은 배정 관리 권한이 있어야 한다 */
   async listReviewHistory(p: { scope: 'mine' | 'all'; status?: '승인' | '반려'; q?: string; page: number; pageSize: number }) {
     const qs = new URLSearchParams({ scope: p.scope, page: String(p.page), pageSize: String(p.pageSize) })
