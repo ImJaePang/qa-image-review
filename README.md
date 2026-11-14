@@ -46,6 +46,7 @@ db/init/    스키마·시드 SQL (컨테이너 최초 기동 시 자동 실행)
 db/migrations/  이후 변경 SQL (번호순, `npm run migrate`로 적용, 적용 이력은 schema_migrations)
 docs/       기획서(plan.md), 설계 결정과 이유(design.md), 진행 기록(progress.md), 사용 방법(guide.md), 배포 방법(deploy.md), 개념 정리(study-notes.md)
 Dockerfile  화면+API를 한 이미지로 묶는 배포 구성 (docker-compose.yml의 `app` 프로필)
+docker-compose.prod.yml, deploy/  운영(VPS) 구성: HTTPS 프록시(Caddy)와 공개용 설정 고정 (docs/deploy.md 6장)
 ```
 
 ## 전체 실행 (개발)

@@ -485,3 +485,11 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 - **검수 화면 서버 API**: `GET /assignments/:code/images`에 `sort`·`filter`·`verdict`, `GET /assignments/:code/image-counts`(결과 칩 건수, 판정 필터만 반영), `GET /assignments/:code/next-unreviewed`가 **같은 `FROM`·`WHERE`·정렬을 공유**한다. `next-unreviewed`는 지금 보는 목록 안의 1-based 위치(`row_number`)를 돌려주므로 기본값(필터 없음, 배정 순서)에서는 예전의 `position`과 같다.
 - **목록이 흔들리지 않게(목업과 다른 점)**: 목업은 '미검토' 필터에서 결정한 이미지가 목록에서 사라진다고 보여 줬지만, 구현은 **결정한 이미지가 표시만 바뀌고 남는다**. 이유는 낙관적 업데이트와 50장 단위 가상 스크롤 캐시를 함께 쓰는 구조라, 목록에서 즉시 빼면 쪽 경계의 항목이 밀려 어긋나고 A/R 키를 빠르게 누를 때 같은 이미지를 두 번 결정할 위험이 있어서다. 결과 칩 건수(`image-counts`)만 결정 직후 새로 받고, 목록은 필터·정렬을 바꾸거나 다시 열 때 갱신된다.
 - **E2E 데이터 공유**: 시나리오들이 같은 테스트 DB의 미배정 이미지를 쓰므로, 새로 배정하는 시나리오는 시작할 때 `freeImages`(테스트 서버에만 있는 `POST /api/__e2e/free-images`, `backend/test/e2e-server.mjs`)로 배정을 비운다. 앱 코드에는 이 경로가 없다.
+
+### 운영 구성 (2026-11-14)
+- **파일**: `docker-compose.prod.yml`(덧씌우기), `deploy/Caddyfile`, `.env.production.example`. 실행은 `--env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml --profile app`.
+- **프록시로 Caddy**: 인증서(Let's Encrypt) 발급·갱신이 자동이고 설정이 몇 줄이라서. 인터넷에 열리는 것은 80/443뿐이며 앱·DB는 도커 내부 망으로만 통한다. 보안 헤더(HSTS, nosniff, Referrer-Policy)와 요청 본문 상한(60MB, 파일 한 장 50MB + 여유)을 프록시에서 건다.
+- **공개 설정은 덧씌우기 파일에서 고정**: `DEMO_MODE=false`·`COOKIE_SECURE=true`·`TRUST_PROXY=true`를 `.env`로 바꿀 수 없게 한다. 이유는 공개 서버에서 설정 하나를 빠뜨려 데모 모드나 HTTP 쿠키로 열리는 실수를 구조로 막기 위해서. `ADMIN_PASSWORD`와 `DOMAIN`은 없으면 compose가 시작을 거부한다(`:?`).
+- **포트 기본값 변경**: 기본 `docker-compose.yml`의 DB·앱 포트를 `127.0.0.1`에만 연다(앱은 `APP_BIND`로 변경 가능). 이유는 서버에서 이 파일을 그대로 쓰더라도 DB·앱이 인터넷에 노출되지 않는 쪽이 안전한 기본값이기 때문. 로컬 개발(`localhost`)에는 영향이 없다.
+- **검증**: 개발 DB와 격리한 프로젝트로 `DOMAIN=localhost`(Caddy 내장 인증서)로 전체를 띄워 HTTPS·보안 헤더·HTTP→HTTPS 리디렉션·쿠키 Secure·데모 계정 정리·포트 노출·필수값 누락 거부를 확인하고 볼륨까지 지웠다. **실제 서버·도메인에서의 인증서 발급, 백업 복원은 미확인.**
+- **한계**: 서버 1대·DB 1개(이중화·무중단 배포 없음), 백업은 문서의 수동 명령뿐, 실제 모델 미포함.

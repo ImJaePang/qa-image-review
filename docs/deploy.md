@@ -37,7 +37,7 @@ docker compose --profile app up -d --build
 2. **프록시 뒤라면 `TRUST_PROXY=true`**. 안 그러면 로그인 잠금이 모든 방문자를 한 주소로 보고 한꺼번에 잠근다. 반대로 프록시가 없는데 켜면 접속 주소를 위조할 수 있으니 켜지 않는다.
 3. **비밀값을 새로 만든다**: `POSTGRES_PASSWORD`, `JWT_SECRET`을 길고 무작위로.
 4. **데모 계정은 0번이 자동으로 정리한다.** 면접관에게 보여 줄 계정이 필요하면 공개 서버에서 사용자 관리로 새로 만든다(가입 신청 → 승인). 시드 SQL의 `1234`는 저장소에 공개되어 있는 값이므로 공개 서버에서 절대 쓰지 않는다.
-5. **DB 포트를 닫는다**: `docker-compose.yml`의 `db.ports`(5432 공개)는 개발 편의용이다. 서버에서는 이 줄을 지워 컨테이너 안에서만 접근되게 한다.
+5. **DB·앱 포트**: 기본값이 이 PC에서만 접속되도록(127.0.0.1) 바뀌어 있다. 인터넷에 열리는 것은 운영 구성의 프록시(Caddy)의 80/443뿐이다(6장). 같은 망의 다른 PC에서 열어 보려면 `APP_BIND=0.0.0.0`.
 6. **메일**: 임시 비밀번호를 메일로 보내려면 `MAIL_MODE=smtp`와 `SMTP_*`를 설정한다. 끄면(`off`) 관리자 화면에 임시 비밀번호가 한 번 보인다.
 7. 가입은 관리자 승인 후에만 사용할 수 있지만, 누구나 신청은 할 수 있다. 원하지 않으면 공개 범위를 제한한다.
 
@@ -53,7 +53,7 @@ C를 할 때 알아둘 점:
 - 컨테이너 환경변수로 `POSTGRES_HOST/PORT/USER/PASSWORD/DB`, `JWT_SECRET`, `COOKIE_SECURE=true`, `TRUST_PROXY=true`, `DEMO_DATA_COUNT`를 준다. 시작할 때 마이그레이션을 적용한다.
 - **스키마 최초 적용**: 이 프로젝트의 DB 초기화는 compose의 `db/init/*.sql`(스키마+시드)이 `db` 컨테이너 최초 기동 때만 실행되는 방식이다. 외부 관리형 DB를 쓰면 `db/init/01_schema.sql`, `02_seed.sql`을 한 번 직접 실행해야 한다(이후 변경은 시작 시 자동 마이그레이션).
 - **이미지 파일 저장소**: `/data/images`에 볼륨(영구 디스크)이 필요하다. 영구 디스크가 없는 무료 요금제에서는 재시작할 때마다 파일이 사라지므로 `DEMO_DATA_COUNT`로 다시 만들어지지만, 업로드한 파일은 남지 않는다.
-- 서버 한 대(VPS)에 이 compose를 그대로 올리고 앞에 Caddy/nginx로 HTTPS를 붙이는 방법이 가장 단순하다.
+- 서버 한 대(VPS)에 이 compose를 올리고 앞에 Caddy로 HTTPS를 붙이는 방법이 가장 단순하다. **이 저장소에 준비되어 있다 → 6장.**
 
 ## 5. 환경변수 요약 (배포 관련)
 | 변수 | 기본값 | 설명 |
@@ -68,3 +68,48 @@ C를 할 때 알아둘 점:
 | `ADMIN_EMAIL` | 없음 | 선택. 관리자 이메일 (기본 admin@example.com) |
 | `DEMO_DATA_COUNT` | 0 (compose는 300) | 처음 한 번 만들 목 이미지 수 |
 | `MAIL_MODE` | off | off / log(개발만) / smtp |
+| `APP_BIND` | `127.0.0.1` | 앱 포트(8080)를 여는 주소. 같은 망의 다른 PC에서 열려면 `0.0.0.0` (운영은 프록시가 받으므로 그대로 둔다) |
+| `DOMAIN` | 없음 | 운영 프록시의 도메인 (예: qa.example.com). `docker-compose.prod.yml`에서 필수 |
+| `HTTP_PORT` / `HTTPS_PORT` | 80 / 443 | 운영 프록시가 여는 포트 (로컬 시험에서만 바꾼다) |
+
+## 6. 서버(VPS)에 올리기
+
+**준비된 것**: `docker-compose.prod.yml`(운영 덧씌우기), `deploy/Caddyfile`(HTTPS 프록시), `.env.production.example`(운영 설정 예시). 구성 안내: 인터넷에 열리는 것은 Caddy의 80/443뿐이고, 앱(3000)과 DB(5432)는 밖에 열리지 않는다. 공개 서버 설정(`DEMO_MODE=false`, `COOKIE_SECURE=true`, `TRUST_PROXY=true`)은 `.env`로 바꿀 수 없게 덧씌우기 파일에서 고정한다.
+
+**상태**: 개발 PC에서 `DOMAIN=localhost`(Caddy 내장 인증서)로 전체를 띄워 아래를 확인했다 — HTTPS 화면·API, HTTP→HTTPS 308, 보안 헤더(HSTS 등), 로그인 쿠키 `HttpOnly; Secure; SameSite=Lax`, 데모 계정(1234) 정리와 새 관리자 로그인, 밖에 열린 포트는 80/443뿐, 필수값(`ADMIN_PASSWORD`·`DOMAIN`) 누락 시 시작 거부. **실제 서버와 실제 도메인에서는 아직 실행해 보지 않았다**(Let's Encrypt 인증서 발급은 실제 도메인에서만 확인할 수 있다).
+
+### 순서
+1. **준비물**: Ubuntu 22.04 이상 VPS(메모리 2GB 이상 권장: 데이터베이스+서버+이미지 처리), 도메인(예: `qa.example.com`)과 그 DNS **A 레코드가 서버 IP를 가리키게** 해 둔다. 서버 방화벽은 22(SSH), 80, 443만 연다.
+2. **Docker 설치**: `curl -fsSL https://get.docker.com | sh` 후 `sudo usermod -aG docker $USER` (다시 로그인).
+3. **받기**: `git clone https://github.com/ImJaePang/qa-image-review.git && cd qa-image-review`
+4. **설정**: `cp .env.production.example .env.production` 후 값을 채운다. 비밀번호·키는 `openssl rand -base64 36`로 만든다. 필수: `DOMAIN`, `POSTGRES_PASSWORD`, `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`(12자 이상). `.env.production`은 git에 올라가지 않는다.
+5. **실행**:
+   ```bash
+   docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml --profile app up -d --build
+   ```
+   처음에는 이미지를 빌드하느라 몇 분 걸린다. 시작 때 마이그레이션 적용, 데모 계정 정리, 관리자 설정이 자동으로 된다.
+6. **확인**: `https://<도메인>` 접속(인증서 발급에 1분 안팎) → `ADMIN_EMAIL`/`ADMIN_PASSWORD`로 로그인 → 상단 `비밀번호 변경`이 되는지, 설정 > 사용자 관리에 데모 계정 3개(qa1~qa3)가 비활성으로 보이는지 확인. 로그: `docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.production --profile app logs -f app`.
+7. **데이터 넣기**: 데모 이미지는 만들지 않는다(`DEMO_DATA_COUNT=0`). 관리자로 `데이터 > 이미지 업로드`에서 이미지를 올리면 워커가 판정한다(기본은 목 모델). 면접관에게 보여 줄 계정은 가입 신청 → 사용자 관리에서 승인으로 만든다.
+
+### 운영
+- **업데이트**: `git pull` 후 5번 명령을 다시 실행한다(`--build`가 이미지를 새로 만들고, 마이그레이션은 시작 때 자동 적용). 데이터는 볼륨에 있어 유지된다.
+- **중지**: `docker compose ... --profile app down` (**`-v`는 붙이지 않는다** — 데이터가 지워진다). 서버를 재부팅해도 `restart: unless-stopped`로 다시 올라온다.
+- **백업**: DB `docker exec qa-db pg_dump -U <POSTGRES_USER> <POSTGRES_DB> | gzip > backup-$(date +%F).sql.gz`, 이미지 파일 볼륨(`appdata`)은 `docker run --rm -v qa-image-review_appdata:/d -v "$PWD":/b alpine tar czf /b/images-$(date +%F).tgz -C /d .`. 정기적으로 서버 밖으로 복사해 둔다(백업 자동화는 아직 없다).
+- **복원 시험은 해 본 적 없다.** 중요한 데이터가 생기기 전에 한 번 해 볼 것.
+
+### 공개 전 점검표 (3장의 항목과 대응)
+| 항목 | 상태 |
+|---|---|
+| `DEMO_MODE=false`, 데모 계정 정리, 관리자 비밀번호 | 덧씌우기 파일이 고정 + 시작 때 자동 (필수값 없으면 시작 거부) |
+| HTTPS, 쿠키 Secure | Caddy가 인증서 자동 발급 + `COOKIE_SECURE=true` 고정 |
+| `TRUST_PROXY` | 프록시 뒤라 `true` 고정 (로그인 잠금이 접속자별로 정확히 동작) |
+| DB·앱 포트 | 밖에 열리지 않음 (기본 127.0.0.1) |
+| 비밀값 | `.env.production`에 직접 채움 (저장소에 없음) |
+| 메일 | 기본 off. 임시 비밀번호를 메일로 보내려면 `MAIL_MODE=smtp` + `SMTP_*` |
+| 가입 | 누구나 신청 가능, 승인은 관리자만. 원하지 않으면 공개 범위를 제한 |
+
+### 아직 안 한 것 / 알아둘 점
+- 실제 서버·도메인에서 실행과 인증서 발급 확인, 백업 복원 시험, 백업 자동화.
+- 실제 모델(Python)은 이미지에 없다 → 목 모델로 동작한다(박스·점수는 가짜).
+- 업로드 이미지는 서버 디스크에 쌓인다(`appdata` 볼륨). 디스크 용량을 지켜볼 것.
+- 서버가 한 대라 점검·업데이트 중에는 잠시 접속이 끊긴다.
