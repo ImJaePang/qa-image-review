@@ -14,6 +14,9 @@ export const config = {
   trustProxy: e.TRUST_PROXY === 'true',
   // 로그인 쿠키의 Secure 속성: 기본은 운영(production)에서 켠다. HTTPS 없이 로컬에서 운영 모드를 시험할 때만 COOKIE_SECURE=false
   cookieSecure: e.COOKIE_SECURE === undefined ? e.NODE_ENV === 'production' : e.COOKIE_SECURE === 'true',
+  // 데모 모드: 로그인 화면에 데모 계정 안내와 기본 입력값을 보이고, 시작 시 데모 배정을 만든다. 기본은 운영(production)이 아닐 때만 켠다.
+  // 인터넷에 공개하는 서버에서는 반드시 DEMO_MODE=false (데모 계정 비밀번호가 알려져 있으므로)
+  demoMode: e.DEMO_MODE === undefined ? e.NODE_ENV !== 'production' : e.DEMO_MODE === 'true',
   // 빌드한 화면(frontend/dist) 위치. 지정하면 API 서버가 화면도 함께 내려준다 (단일 컨테이너 배포용). 비우면 API만.
   frontendDist: e.FRONTEND_DIST ? resolve(e.FRONTEND_DIST) : undefined,
   // 이미지/히트맵 파일 위치 (generate-mock.mjs 출력 폴더)

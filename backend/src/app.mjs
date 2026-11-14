@@ -63,6 +63,9 @@ export async function buildApp(opts = {}) {
     return { ok: true }
   })
 
+  // 로그인 전에 화면이 알아야 하는 설정 (비밀이 아닌 것만)
+  app.get('/api/config', async () => ({ demoMode: config.demoMode }))
+
   await app.register(authRoutes, { prefix: '/api' })
   await app.register(assignmentRoutes, { prefix: '/api' })
   await app.register(imageRoutes, { prefix: '/api' })

@@ -39,6 +39,8 @@ services:
       # 리버스 프록시(nginx·호스팅 서비스) 뒤에서만 true
       TRUST_PROXY: ${TRUST_PROXY:-false}
       MAIL_MODE: ${MAIL_MODE:-off}
+      # 데모 모드: 로그인 화면의 데모 계정 안내·기본 입력값 + 데모 배정 1건. 인터넷에 공개할 때는 false
+      DEMO_MODE: ${DEMO_MODE:-true}
       # 처음 한 번 목 이미지를 이만큼 만들어 적재 (0이면 빈 상태로 시작)
       DEMO_DATA_COUNT: ${DEMO_DATA_COUNT:-300}
     volumes:
