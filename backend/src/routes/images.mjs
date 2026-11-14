@@ -1,6 +1,7 @@
 import { pool, tx } from '../db.mjs'
 import { httpError } from '../errors.mjs'
-import { currentReview, latestVerdict } from '../sql.mjs'
+import { currentReview, latestVerdict, RULE_OF_VERDICT } from '../sql.mjs'
+import { VIEW_ORDERS, boundaryExpr, orderBySql } from '../imageOrder.mjs'
 import { requireAnyPermission } from '../permissions.mjs'
 import { canAct, codeParam, findAssignment } from './assignments.mjs'
 
@@ -9,6 +10,32 @@ const FILTERS = {
   unreviewed: 'rc.status IS NULL',
   approved: "rc.status = 'APPROVED'",
   rejected: "rc.status = 'REJECTED'",
+}
+
+// 배정 안의 이미지 목록 공통: 목록·건수·다음 미검토가 같은 조건과 정렬을 쓴다
+const FROM = `
+  FROM assignment_images ai
+  JOIN images i ON i.id = ai.image_id
+  JOIN model_runs mr ON mr.id = ai.run_id
+  ${latestVerdict('ai.run_id')}
+  ${RULE_OF_VERDICT}
+  ${currentReview('ai.assignment_id', 'ai.image_id')}`
+const WHERE = (filter) => `WHERE ai.assignment_id = $1 AND ${FILTERS[filter]} AND ($2::text IS NULL OR v.result = $2)`
+const viewOrder = (sort) =>
+  `${
+    sort === 'position'
+      ? 'ai.position'
+      : orderBySql(sort, {
+          score: 'mr.overall_score',
+          boundary: boundaryExpr('mr.overall_score', 'ru.params'),
+          boxes: '(SELECT count(*) FROM detections d WHERE d.run_id = ai.run_id)',
+          newest: 'i.id',
+        })
+  }, ai.position`
+const QUERY_FILTERS = {
+  filter: { type: 'string', enum: Object.keys(FILTERS), default: 'all' },
+  verdict: { type: 'string', enum: ['NORMAL', 'SUSPECT', 'DEFECT'] },
+  sort: { type: 'string', enum: VIEW_ORDERS, default: 'position' },
 }
 
 // 파일은 이미지 ID로 요청한다 (routes/files.mjs). 디스크 경로는 URL에 나오지 않는다.
@@ -49,8 +76,7 @@ export default async function imageRoutes(app) {
         querystring: {
           type: 'object',
           properties: {
-            filter: { type: 'string', enum: Object.keys(FILTERS), default: 'all' },
-            verdict: { type: 'string', enum: ['NORMAL', 'SUSPECT', 'DEFECT'] },
+            ...QUERY_FILTERS,
             page: { type: 'integer', minimum: 1, default: 1 },
             pageSize: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
           },
@@ -58,15 +84,9 @@ export default async function imageRoutes(app) {
       },
     },
     async (req) => {
-      const { filter, verdict = null, page, pageSize } = req.query
+      const { filter, verdict = null, sort, page, pageSize } = req.query
       const a = await findAssignment(pool, req.params.code)
-      const from = `
-        FROM assignment_images ai
-        JOIN images i ON i.id = ai.image_id
-        JOIN model_runs mr ON mr.id = ai.run_id
-        ${latestVerdict('ai.run_id')}
-        ${currentReview('ai.assignment_id', 'ai.image_id')}
-        WHERE ai.assignment_id = $1 AND ${FILTERS[filter]} AND ($2::text IS NULL OR v.result = $2)`
+      const from = `${FROM} ${WHERE(filter)}`
       const [list, total] = await Promise.all([
         pool.query(
           `SELECT i.image_key, i.file_name, i.width, i.height, i.original_path, i.preview_path, i.thumb_path,
@@ -77,7 +97,7 @@ export default async function imageRoutes(app) {
                   COALESCE((SELECT json_agg(json_build_object('x', d.x, 'y', d.y, 'width', d.width, 'height', d.height,
                                                               'score', d.score, 'reasonCode', d.reason_code) ORDER BY d.score, d.id)
                             FROM detections d WHERE d.run_id = ai.run_id), '[]'::json) AS boxes
-           ${from} ORDER BY ai.position LIMIT $3 OFFSET $4`,
+           ${from} ORDER BY ${viewOrder(sort)} LIMIT $3 OFFSET $4`,
           [a.id, verdict, pageSize, (page - 1) * pageSize],
         ),
         pool.query(`SELECT count(*) AS n ${from}`, [a.id, verdict]),
@@ -86,28 +106,48 @@ export default async function imageRoutes(app) {
     },
   )
 
-  // 다음 미검토 이미지 위치(position, 1부터). after 뒤에서 찾고 없으면 처음부터 다시 찾는다.
+  // 결과 칩의 건수: 판정 필터만 반영하고 결과(전체·미검토·승인·반려)는 각각 센다
+  app.get(
+    '/assignments/:code/image-counts',
+    { schema: { params: codeParam, querystring: { type: 'object', properties: { verdict: QUERY_FILTERS.verdict } } } },
+    async (req) => {
+      const a = await findAssignment(pool, req.params.code)
+      const { rows } = await pool.query(
+        `SELECT count(*)::int AS "all",
+                count(*) FILTER (WHERE rc.status IS NULL)::int AS unreviewed,
+                count(*) FILTER (WHERE rc.status = 'APPROVED')::int AS approved,
+                count(*) FILTER (WHERE rc.status = 'REJECTED')::int AS rejected
+         ${FROM} ${WHERE('all')}`,
+        [a.id, req.query.verdict ?? null],
+      )
+      return rows[0]
+    },
+  )
+
+  // 다음 미검토 이미지 위치(1부터). 지금 보는 목록(결과 필터·판정·정렬)을 기준으로 한 위치이고,
+  // after 뒤에서 찾고 없으면 처음부터 다시 찾는다. 기본값(필터 없음, 배정 순서)은 예전과 같은 위치(position)다.
   app.get(
     '/assignments/:code/next-unreviewed',
     {
       schema: {
         params: codeParam,
-        querystring: { type: 'object', properties: { after: { type: 'integer', minimum: 0, default: 0 } } },
+        querystring: { type: 'object', properties: { after: { type: 'integer', minimum: 0, default: 0 }, ...QUERY_FILTERS } },
       },
     },
     async (req) => {
+      const { filter, verdict = null, sort } = req.query
       const a = await findAssignment(pool, req.params.code)
       const find = (after) =>
         pool.query(
-          `SELECT ai.position FROM assignment_images ai
-           WHERE ai.assignment_id = $1 AND ai.position > $2
-             AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.assignment_id = ai.assignment_id AND r.image_id = ai.image_id)
-           ORDER BY ai.position LIMIT 1`,
-          [a.id, after],
+          `WITH ordered AS (
+             SELECT row_number() OVER (ORDER BY ${viewOrder(sort)}) AS pos, (rc.status IS NULL) AS unreviewed
+             ${FROM} ${WHERE(filter)})
+           SELECT pos::int AS pos FROM ordered WHERE unreviewed AND pos > $3 ORDER BY pos LIMIT 1`,
+          [a.id, verdict, after],
         )
       let r = await find(req.query.after)
       if (!r.rowCount && req.query.after > 0) r = await find(0)
-      return { position: r.rows[0]?.position ?? null }
+      return { position: r.rows[0]?.pos ?? null }
     },
   )
 

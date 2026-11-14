@@ -1,6 +1,7 @@
 import { pool, tx } from '../db.mjs'
 import { httpError } from '../errors.mjs'
-import { LATEST_RUN, latestVerdict } from '../sql.mjs'
+import { LATEST_RUN, latestVerdict, RULE_OF_VERDICT } from '../sql.mjs'
+import { ORDERS, ORDER_LABEL, boundaryExpr, orderBySql, sampleSize } from '../imageOrder.mjs'
 import { pagingQuery } from '../paging.mjs'
 import { can, requireAnyPermission } from '../permissions.mjs'
 
@@ -176,13 +177,17 @@ export default async function assignmentRoutes(app) {
             dueDate: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
             verdicts: { type: 'array', minItems: 1, uniqueItems: true, items: { type: 'string', enum: VERDICTS } },
             count: { type: 'integer', minimum: 1, maximum: 5000 },
+            // 검수 순서(배정 안에 고정). 기본은 점수 낮은 순
+            order: { type: 'string', enum: ORDERS, default: 'score_asc' },
+            // 정상을 대상에 넣을 때 그중 무작위로 뽑을 비율(%). 기본 100 = 전부. 의심·불량은 항상 전부 대상
+            normalPercent: { type: 'integer', minimum: 1, maximum: 100, default: 100 },
           },
         },
       },
     },
     async (req, reply) => {
       if (!canManage(req.user)) throw httpError(403, '배정 권한이 없습니다.')
-      const { title, assigneeId, dueDate, verdicts, count } = req.body
+      const { title, assigneeId, dueDate, verdicts, count, order, normalPercent } = req.body
       if (!/^\d+$/.test(String(assigneeId))) throw httpError(400, '담당자가 올바르지 않습니다.')
 
       const created = await tx(async (db) => {
@@ -210,26 +215,54 @@ export default async function assignmentRoutes(app) {
           throw err
         }
 
+        // 정상 표본: 아직 배정되지 않은 정상 이미지 수에서 비율만큼 장수를 정한다 (의심·불량은 전부 후보)
+        const wantsNormal = verdicts.includes('NORMAL')
+        const normalAvail = wantsNormal
+          ? (
+              await db.query(
+                `SELECT count(*)::int AS n FROM images i ${LATEST_RUN} ${latestVerdict('lr.id')}
+                 WHERE i.ingest_status = 'DONE' AND v.result = 'NORMAL' AND NOT EXISTS (SELECT 1 FROM assignment_images ai WHERE ai.image_id = i.id)`,
+              )
+            ).rows[0].n
+          : 0
+        const normalTake = sampleSize(normalAvail, normalPercent)
+
+        // 후보(의심·불량 전부 + 정상 표본)를 고른 순서로 정렬해 이미지 수만큼 자르고, 그 순서를 배정 안의 위치로 고정한다
+        const cols = (p) => ({ score: `${p}score`, boundary: `${p}boundary`, boxes: `${p}boxes`, newest: `${p}newest` })
         const picked = await db.query(
-          `INSERT INTO assignment_images (assignment_id, image_id, run_id, position)
-           SELECT $1, p.image_id, p.run_id, row_number() OVER (ORDER BY p.overall_score, p.image_id)
-           FROM (
-             SELECT i.id AS image_id, lr.id AS run_id, lr.overall_score
-             FROM images i ${LATEST_RUN} ${latestVerdict('lr.id')}
+          `WITH base AS (
+             SELECT i.id AS image_id, lr.id AS run_id, v.result, lr.overall_score AS score,
+                    ${boundaryExpr('lr.overall_score', 'ru.params')} AS boundary,
+                    (SELECT count(*) FROM detections d WHERE d.run_id = lr.id) AS boxes,
+                    i.id AS newest
+             FROM images i ${LATEST_RUN} ${latestVerdict('lr.id')} ${RULE_OF_VERDICT}
              WHERE i.ingest_status = 'DONE' -- 수신·추론이 끝난 이미지만 (대기·처리 중·실패는 제외)
                AND NOT EXISTS (SELECT 1 FROM assignment_images ai WHERE ai.image_id = i.id)
                AND v.result = ANY($2::text[])
-             ORDER BY i.id
-             LIMIT $3
-           ) p`,
-          [a.id, verdicts, count],
+           ), chosen AS (
+             SELECT * FROM base WHERE result <> 'NORMAL'
+             UNION ALL
+             (SELECT * FROM base WHERE result = 'NORMAL' ORDER BY random() LIMIT $4)
+           )
+           INSERT INTO assignment_images (assignment_id, image_id, run_id, position)
+           SELECT $1, p.image_id, p.run_id, row_number() OVER (ORDER BY ${orderBySql(order, cols('p.'))}, p.image_id)
+           FROM (SELECT * FROM chosen ORDER BY ${orderBySql(order, cols(''))}, image_id LIMIT $3) p`,
+          [a.id, verdicts, count, normalTake],
         )
         if (!picked.rowCount) throw httpError(400, '조건에 맞는 미배정 이미지가 없습니다.')
 
+        // 이력에 기준을 남긴다: 나중에 어떤 순서·표본 기준으로 배정했는지 설명할 수 있게
+        let note = `${assignee.rows[0].name}에게 배정 (${picked.rowCount}장) · 검수 순서: ${ORDER_LABEL[order]}`
+        if (wantsNormal) {
+          const normalTaken = (
+            await db.query(`SELECT count(*)::int AS n FROM assignment_images ai ${latestVerdict('ai.run_id')} WHERE ai.assignment_id = $1 AND v.result = 'NORMAL'`, [a.id])
+          ).rows[0].n
+          note += normalPercent < 100 ? ` · 정상 표본 ${normalPercent}% (${normalTaken}장)` : ` · 정상 전체 (${normalTaken}장)`
+        }
         await db.query(
           `INSERT INTO assignment_history (assignment_id, from_status, to_status, action, actor_id)
            VALUES ($1, NULL, 'ASSIGNED', $2, $3)`,
-          [a.id, `${assignee.rows[0].name}에게 배정 (${picked.rowCount}장)`, req.user.sub],
+          [a.id, note, req.user.sub],
         )
         return { id: a.code, count: picked.rowCount }
       })

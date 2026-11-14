@@ -5,5 +5,11 @@ import { resetTestDb } from './helpers.mjs'
 await resetTestDb()
 const { buildApp } = await import('../src/app.mjs')
 const app = await buildApp({ logger: false })
+// 화면 테스트 전용(이 서버에만 있다): 시나리오끼리 미배정 이미지를 서로 쓰지 않도록 배정을 모두 비운다
+const { pool } = await import('../src/db.mjs')
+app.post('/api/__e2e/free-images', async () => {
+  await pool.query('DELETE FROM assignment_history; DELETE FROM assignment_images; DELETE FROM assignments')
+  return { ok: true }
+})
 await app.listen({ port: Number(process.env.E2E_API_PORT ?? 3201), host: '127.0.0.1' })
 console.log('e2e api ready')
