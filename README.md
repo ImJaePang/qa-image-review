@@ -24,7 +24,7 @@ AI가 생성한 이미지를 사전 검증한 뒤, QA 담당자가 화면에서 
 - **파일 수신 파이프라인**: 폴더 감시 워커가 파일을 안정 판정·형식 확인 후 1장씩 추론하고, 실패 파일은 격리한다. 화면 업로드(수천 장, 재시도·일시 중지)도 같은 경로를 쓴다.
 - **사용자·권한·메뉴**: 가입 승인, 사용기한·만료 해제, 일괄 처리, 권한 종류와 권한별 메뉴·기능을 DB로 관리하고 서버가 같은 표로 API를 막는다. 로그인 시도 횟수 제한, 임시 비밀번호 발급과 변경 강제.
 - **모델 어댑터**: 호출부를 어댑터로 분리하고 출력 JSON 계약을 고정했다. 기본은 목(mock) 모델, 실제 모델(PatchCore, Anomalib)도 같은 계약으로 연결해 정답 데이터로 평가한다(이 데이터에서는 AUROC 0.683 — 연결 검증용 기준선이며 한계와 개선 후보는 [design.md](docs/design.md) 9장에 정리).
-- **테스트**: 백엔드 227개(API 통합·마이그레이션·워커 등, 전용 DB), 프론트 단위 52개, 브라우저 시나리오 6개(Playwright), 파이썬 17개.
+- **테스트**: 백엔드 232개(API 통합·마이그레이션·워커 등, 전용 DB), 프론트 단위 52개, 브라우저 시나리오 7개(Playwright), 파이썬 17개.
 
 기술: React · Vite · TypeScript · Tailwind · shadcn/ui / Node.js(Fastify) · PostgreSQL / Python(PatchCore) / Docker.
 
@@ -33,7 +33,7 @@ AI가 생성한 이미지를 사전 검증한 뒤, QA 담당자가 화면에서 
 cp .env.example .env      # 비밀번호·JWT_SECRET 수정
 docker compose --profile app up -d --build   # http://localhost:8080
 ```
-데모 계정 `admin@example.com`(관리자), `qa1@example.com`(QA) / 비밀번호 `1234`. 데모 이미지 300장과 `qa1`의 데모 배정 1건이 자동으로 만들어진다. 공개 서버에 올릴 때의 주의점은 [docs/deploy.md](docs/deploy.md).
+데모 계정 `admin@example.com`(관리자), `qa1@example.com`(QA) / 비밀번호 `1234`. 데모 이미지 300장과 `qa1`의 데모 배정 1건이 자동으로 만들어진다. 이 `1234`는 **로컬 데모 전용**이다: 공개 서버는 `DEMO_MODE=false`와 `ADMIN_PASSWORD`를 설정해야 시작되고 데모 계정은 시작할 때 정리된다([docs/deploy.md](docs/deploy.md)).
 
 ## 구조
 ```
@@ -101,15 +101,19 @@ npm run dev
 
 26. [x] 공개용 데모 정리: `DEMO_MODE`(기본: 운영 모드가 아니면 켬, compose는 켬). 켜면 로그인 화면에 데모 계정 안내·기본 입력값을 보이고 시작 시 데모 배정 1건(qa1, 의심·불량 40장)을 만든다. 끄면(공개 서버) 빈 칸으로 시작하고 안내·배정 없음. 화면은 로그인 전 `GET /api/config`로 읽는다. 두 모드를 Docker로 확인.
 
+28. [x] 공개 서버의 초기 비밀번호: `DEMO_MODE=false`면 시작할 때 비밀번호가 아직 `1234`인 계정을 찾아 관리자는 `.env`의 `ADMIN_PASSWORD`(12자 이상)로 교체하고 나머지 데모 계정은 비활성화+무작위 비밀번호로 만든다. 설정이 없거나 약하면 서버가 시작을 거부한다. 다시 시작해도 덮어쓰지 않는다. 로컬 데모(`DEMO_MODE=true`)는 `1234` 그대로. `src/bootstrap.mjs`, `npm run bootstrap-admin`. 컨테이너로 거부·적용·재시작을 확인.
+
+29. [x] 핵심 흐름 E2E(Playwright `e2e/review-flow.spec.ts`): 관리자 배정 → QA 점검 시작 → 승인/반려 → 점검 완료 → 관리자 확인 완료.
+
 27. [x] 포트폴리오용 화면 캡처(`captures/2026-11-14_v1.0-portfolio`, 11장: 로그인·배정·검수(라이트/다크)·신규 배정·소요 시간·규칙·사용자·권한별 메뉴·연계·업로드)와 README 맨 위 소개
 
-남은 후보(필요할 때): 공개 서버용 시드 계정 비밀번호 변경 절차 자동화, 로그인·검수 핵심 흐름 E2E, 모델 개선·다른 모델 비교(평가 도구 있음), 다국어(design.md 6장).
+남은 후보(필요할 때): GitHub 푸시, 공개 서버 실제 배포, 모델 개선·다른 모델 비교(평가 도구 있음), 다국어(design.md 6장).
 
 ### 점검 메모 (2026-11-04)
 전체 점검 결과(2026-11-04 시점, 현재 개수는 아래 테스트 절): 백엔드 테스트 208개·프론트 50개·파이썬 17개 모두 통과, `tsc -b`·`vite build` 성공. 정리할 작은 항목:
 - 프론트 린트(`npm run lint`, oxlint): 경고 0 (2026-11-05 정리, 바뀐 5곳은 Playwright 화면 테스트로 확인). 모달·폼을 불러온 값으로 채우던 `useEffect`+`setState`를 "렌더 중에 키가 바뀐 때만 한 번 채우기"로 바꿨고(UserEditDialog, RoleEditDialog, IntegrationFormDialog, RulesPage, MenusPage), shadcn 생성 폴더 `components/ui`는 `only-export-components` 규칙을 껐다. 브라우저 동작 확인은 아직 안 함.
 - 번들 분할 완료(2026-11-05): 화면 본문 9개를 `React.lazy`로 나눠 첫 번들이 770KB → 373KB(gzip 241 → 118KB). 본문을 받는 동안에는 상단·좌측 메뉴를 유지하고 본문만 '불러오는 중…'. 이 점검 항목은 모두 정리됨.
-- 화면 자동 테스트(Playwright)는 폼 5곳 + 임시 비밀번호→변경 강제 흐름 1개. 로그인·검수 흐름 같은 핵심 시나리오는 아직 없다.
+- 화면 자동 테스트(Playwright)는 폼 5곳 + 임시 비밀번호→변경 강제 + 배정~확인 완료 핵심 흐름 1개 (2026-11-14).
 - (2026-11-14) `npm test`(vitest)가 `e2e/` 폴더를 읽어 실패하던 문제를 `vite.config.ts`의 `test.exclude`로 고쳤다.
 
 새 세션 시작: `README.md 읽고 이어서 해줘` 한 줄이면 된다 (CLAUDE.md가 README → design.md 순서로 읽도록 안내함).
@@ -147,11 +151,11 @@ cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api는 API
 
 ## 테스트
 ```
-cd backend && npm test      # 백엔드 테스트 227개 (API 통합, 사용자·권한·메뉴, 업로드, 수신·워커, 마이그레이션, 모델 계약·어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
+cd backend && npm test      # 백엔드 테스트 232개 (API 통합, 사용자·권한·메뉴, 업로드, 수신·워커, 마이그레이션, 모델 계약·어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
 cd frontend && npm test     # 단위 테스트 52개 (영문 코드↔한글 매핑, 페이징, 사용자·권한 문구, 업로드 전송 큐 등)
 cd frontend && npx tsc -b   # 타입 체크
 cd python && .venv/Scripts/python -m unittest test_metrics test_postprocess   # 파이썬 단위 테스트 17개 (모델 없이 실행)
-cd frontend && npm run test:e2e   # 화면(브라우저) 자동 테스트 6개 (Playwright + 설치된 크롬, DB 컨테이너 필요)
+cd frontend && npm run test:e2e   # 화면(브라우저) 자동 테스트 7개 (Playwright + 설치된 크롬, DB 컨테이너 필요)
 ```
 개발 DB(`qa_review`)는 테스트가 건드리지 않는다. 화면 테스트는 전용 DB `qa_review_test`와 API 3201·프론트 5273 포트를 스스로 띄웠다 끈다(`backend/test/e2e-server.mjs`, `frontend/playwright.config.ts`).
 

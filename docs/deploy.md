@@ -31,12 +31,12 @@ docker compose --profile app up -d --build
 ## 3. 인터넷에 공개하기 전 체크리스트
 데모 계정 비밀번호는 `1234`로 알려져 있다. **`DEMO_MODE=true` 그대로 공개하면 로그인 화면이 계정과 비밀번호를 알려 주고 입력까지 채워 주므로 누구나 관리자로 들어올 수 있다.** 공개한다면:
 
-0. **`DEMO_MODE=false`** (로그인 화면의 안내·기본 입력값이 사라지고 데모 배정도 만들지 않는다). 다만 비밀번호 `1234` 자체는 DB에 남아 있으므로 4번도 꼭 한다.
+0. **`DEMO_MODE=false` + `ADMIN_PASSWORD`** (12자 이상, 길고 무작위로). 로그인 화면의 안내·기본 입력값과 데모 배정이 없어지고, **시작할 때 서버가 데모 계정을 정리한다**: 관리자 비밀번호를 `ADMIN_PASSWORD`로 바꾸고(`ADMIN_EMAIL`이 있으면 이메일도), `qa1`~`qa3`은 비활성화하며 비밀번호를 무작위로 바꾼다. `ADMIN_PASSWORD`가 없거나 약하면 **서버가 뜨지 않는다**(알려진 비밀번호로 공개되는 것을 막는 장치). 이미 바꾼 뒤에는 다시 시작해도 아무것도 덮어쓰지 않는다. 컨테이너가 아니면 `cd backend && npm run bootstrap-admin`.
 
 1. **HTTPS 뒤에 둔다** (호스팅 서비스의 기본 HTTPS 또는 nginx/Caddy). `.env`의 `COOKIE_SECURE=true`.
 2. **프록시 뒤라면 `TRUST_PROXY=true`**. 안 그러면 로그인 잠금이 모든 방문자를 한 주소로 보고 한꺼번에 잠근다. 반대로 프록시가 없는데 켜면 접속 주소를 위조할 수 있으니 켜지 않는다.
 3. **비밀값을 새로 만든다**: `POSTGRES_PASSWORD`, `JWT_SECRET`을 길고 무작위로.
-4. **데모 계정 비밀번호 바꾸기**: 시드 계정(`admin`, `qa1`~`qa3`)은 비밀번호가 `1234`다. 최소한 관리자 비밀번호를 상단 `비밀번호 변경`으로 바꾸고, 쓰지 않을 계정은 사용자 관리에서 비활성화한다. 면접관에게 보여 줄 계정은 따로 안내한다.
+4. **데모 계정은 0번이 자동으로 정리한다.** 면접관에게 보여 줄 계정이 필요하면 공개 서버에서 사용자 관리로 새로 만든다(가입 신청 → 승인). 시드 SQL의 `1234`는 저장소에 공개되어 있는 값이므로 공개 서버에서 절대 쓰지 않는다.
 5. **DB 포트를 닫는다**: `docker-compose.yml`의 `db.ports`(5432 공개)는 개발 편의용이다. 서버에서는 이 줄을 지워 컨테이너 안에서만 접근되게 한다.
 6. **메일**: 임시 비밀번호를 메일로 보내려면 `MAIL_MODE=smtp`와 `SMTP_*`를 설정한다. 끄면(`off`) 관리자 화면에 임시 비밀번호가 한 번 보인다.
 7. 가입은 관리자 승인 후에만 사용할 수 있지만, 누구나 신청은 할 수 있다. 원하지 않으면 공개 범위를 제한한다.
@@ -63,6 +63,8 @@ C를 할 때 알아둘 점:
 | `FILES_DIR` | `data/images` (컨테이너는 `/data/images`) | 이미지·업로드 파일 위치 |
 | `COOKIE_SECURE` | 운영(`NODE_ENV=production`)이면 true | 로그인 쿠키 Secure. HTTPS 없는 로컬 시험은 false |
 | `TRUST_PROXY` | false | 프록시 뒤에서만 true |
-| `DEMO_MODE` | 운영 아니면 true (compose는 true) | 로그인 화면 데모 안내·기본 입력값, 데모 배정. **공개 서버는 false** |
+| `DEMO_MODE` | 운영 아니면 true (compose는 true) | 로그인 화면 데모 안내·기본 입력값, 데모 배정. **공개 서버는 false** (그러면 ADMIN_PASSWORD 필수) |
+| `ADMIN_PASSWORD` | 없음 | `DEMO_MODE=false`일 때 필수. 12자 이상. 관리자 초기 비밀번호 |
+| `ADMIN_EMAIL` | 없음 | 선택. 관리자 이메일 (기본 admin@example.com) |
 | `DEMO_DATA_COUNT` | 0 (compose는 300) | 처음 한 번 만들 목 이미지 수 |
 | `MAIL_MODE` | off | off / log(개발만) / smtp |

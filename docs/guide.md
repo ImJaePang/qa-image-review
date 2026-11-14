@@ -218,7 +218,7 @@ cd backend && npm run worker     # API와 별도 프로세스. 하나만 실행 
 ## 8. 테스트
 
 ```bash
-cd backend && npm test        # 227개: API 통합, 로그인 시도 제한, 메일·비밀번호 변경, 사용자·권한·메뉴, 업로드, 파일 API, 수신·워커, 사본 생성, 마이그레이션, 모델 계약·어댑터
+cd backend && npm test        # 232개: API 통합, 로그인 시도 제한, 메일·비밀번호 변경, 사용자·권한·메뉴, 업로드, 파일 API, 수신·워커, 사본 생성, 마이그레이션, 모델 계약·어댑터
 cd frontend && npm test       # 52개: 영문 코드↔한글 매핑, 페이징, 사용자·권한 문구, 업로드 전송 큐 등
 cd frontend && npx tsc -b     # 타입 체크
 cd python && .venv/Scripts/python -m unittest test_metrics test_postprocess   # 17개: 평가 지표·점수 변환·박스 (모델 없이)
