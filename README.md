@@ -3,6 +3,38 @@
 AI가 생성한 이미지를 사전 검증한 뒤, QA 담당자가 화면에서 검수(승인/반려)하는 연습용 미니 프로젝트.
 기획 전문은 [docs/plan.md](docs/plan.md), **지금까지 구현된 것과 사용 방법은 [docs/guide.md](docs/guide.md)** 참고.
 
+## 한눈에 보기
+
+이미지가 들어오면 모델이 이상 영역을 찾아 점수·판정(정상/의심/불량)을 매기고, 관리자가 검수 건을 담당자에게 배정하면 담당자가 박스·히트맵을 보며 승인/반려한다. 판정 기준·권한·메뉴는 코드가 아니라 DB에서 관리하고, 소요 시간은 서버가 저장한 시각으로 분석한다.
+(실제 업무 자료는 쓰지 않았다. 이미지와 데이터는 모두 직접 만든 것이다.)
+
+| 배정 리스트 (관리자) | 이미지 검수 (QA, 박스·히트맵·단축키) |
+|---|---|
+| ![배정 리스트](captures/2026-11-14_v1.0-portfolio/02-assignments.png) | ![이미지 검수](captures/2026-11-14_v1.0-portfolio/03-review.png) |
+
+| 소요 시간 분석 | 권한별 메뉴·기능 관리 |
+|---|---|
+| ![소요 시간 분석](captures/2026-11-14_v1.0-portfolio/06-time-analysis.png) | ![권한별 메뉴](captures/2026-11-14_v1.0-portfolio/09-menus.png) |
+
+다크 모드, 사용자 관리, 판정 규칙, 연계 관리, 업로드 화면은 [captures/2026-11-14_v1.0-portfolio](captures/2026-11-14_v1.0-portfolio)에 있다.
+
+### 직접 설계·구현한 것
+- **검수 흐름**: 배정 → 점검 시작 → 이미지별 승인/반려 → 점검 완료 → 확인 완료 (서버가 허용된 단계 이동만 통과시키고 이력을 남긴다). 3천 장 배정도 서버 페이지네이션·가상 스크롤·낙관적 업데이트로 처리.
+- **판정 규칙 관리**: 임계값을 `rules` 테이블에 새 버전으로 쌓고, 미리보기 → 재판정 → 되돌리기. 판정마다 모델 버전과 규칙 버전을 기록한다.
+- **파일 수신 파이프라인**: 폴더 감시 워커가 파일을 안정 판정·형식 확인 후 1장씩 추론하고, 실패 파일은 격리한다. 화면 업로드(수천 장, 재시도·일시 중지)도 같은 경로를 쓴다.
+- **사용자·권한·메뉴**: 가입 승인, 사용기한·만료 해제, 일괄 처리, 권한 종류와 권한별 메뉴·기능을 DB로 관리하고 서버가 같은 표로 API를 막는다. 로그인 시도 횟수 제한, 임시 비밀번호 발급과 변경 강제.
+- **모델 어댑터**: 호출부를 어댑터로 분리하고 출력 JSON 계약을 고정했다. 기본은 목(mock) 모델, 실제 모델(PatchCore, Anomalib)도 같은 계약으로 연결해 정답 데이터로 평가한다(이 데이터에서는 AUROC 0.683 — 연결 검증용 기준선이며 한계와 개선 후보는 [design.md](docs/design.md) 9장에 정리).
+- **테스트**: 백엔드 227개(API 통합·마이그레이션·워커 등, 전용 DB), 프론트 단위 52개, 브라우저 시나리오 6개(Playwright), 파이썬 17개.
+
+기술: React · Vite · TypeScript · Tailwind · shadcn/ui / Node.js(Fastify) · PostgreSQL / Python(PatchCore) / Docker.
+
+### 바로 실행해 보기 (Docker만 있으면 됨)
+```
+cp .env.example .env      # 비밀번호·JWT_SECRET 수정
+docker compose --profile app up -d --build   # http://localhost:8080
+```
+데모 계정 `admin@example.com`(관리자), `qa1@example.com`(QA) / 비밀번호 `1234`. 데모 이미지 300장과 `qa1`의 데모 배정 1건이 자동으로 만들어진다. 공개 서버에 올릴 때의 주의점은 [docs/deploy.md](docs/deploy.md).
+
 ## 구조
 ```
 frontend/   React + Vite + TypeScript + Tailwind + shadcn/ui (백엔드 API에 연결)
@@ -13,13 +45,6 @@ db/migrations/  이후 변경 SQL (번호순, `npm run migrate`로 적용, 적�
 docs/       기획서(plan.md), 설계·진행 기록(design.md), 사용 방법(guide.md), 배포 방법(deploy.md), 개념 정리(study-notes.md)
 Dockerfile  화면+API를 한 이미지로 묶는 배포 구성 (docker-compose.yml의 `app` 프로필)
 ```
-
-## 한 줄 실행 (Docker만 있으면 됨)
-```
-cp .env.example .env      # 비밀번호·JWT_SECRET 수정
-docker compose --profile app up -d --build   # http://localhost:8080
-```
-데모 데이터 300장이 자동으로 만들어진다. 공개·배포는 [docs/deploy.md](docs/deploy.md).
 
 ## 실행 (프론트엔드, 개발)
 ```
@@ -76,7 +101,9 @@ npm run dev
 
 26. [x] 공개용 데모 정리: `DEMO_MODE`(기본: 운영 모드가 아니면 켬, compose는 켬). 켜면 로그인 화면에 데모 계정 안내·기본 입력값을 보이고 시작 시 데모 배정 1건(qa1, 의심·불량 40장)을 만든다. 끄면(공개 서버) 빈 칸으로 시작하고 안내·배정 없음. 화면은 로그인 전 `GET /api/config`로 읽는다. 두 모드를 Docker로 확인.
 
-남은 후보(필요할 때): 포트폴리오용 화면 캡처·README 소개, 공개 서버용 시드 계정 비밀번호 변경 절차 자동화, 로그인·검수 핵심 흐름 E2E, 모델 개선·다른 모델 비교(평가 도구 있음), 다국어(design.md 6장).
+27. [x] 포트폴리오용 화면 캡처(`captures/2026-11-14_v1.0-portfolio`, 11장: 로그인·배정·검수(라이트/다크)·신규 배정·소요 시간·규칙·사용자·권한별 메뉴·연계·업로드)와 README 맨 위 소개
+
+남은 후보(필요할 때): 공개 서버용 시드 계정 비밀번호 변경 절차 자동화, 로그인·검수 핵심 흐름 E2E, 모델 개선·다른 모델 비교(평가 도구 있음), 다국어(design.md 6장).
 
 ### 점검 메모 (2026-11-04)
 전체 점검 결과(2026-11-04 시점, 현재 개수는 아래 테스트 절): 백엔드 테스트 208개·프론트 50개·파이썬 17개 모두 통과, `tsc -b`·`vite build` 성공. 정리할 작은 항목:
