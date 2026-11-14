@@ -18,7 +18,47 @@ services:
       timeout: 3s
       retries: 10
 
-  # backend:   # 백엔드(Node.js) 작성 후 추가 예정
+  # ── 앱 전체 실행 (화면 + API + 수신 워커): docker compose --profile app up -d --build  → http://localhost:8080
+  # 개발 중에는 `docker compose up -d`로 db만 띄우고 backend/frontend는 npm으로 실행한다 (profiles 덕분에 아래 둘은 기본으로 뜨지 않는다).
+  app:
+    profiles: ["app"]
+    image: qa-review-app
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: &app-env
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET:?.env에 JWT_SECRET을 16자 이상으로 설정하세요}
+      # HTTPS 없이 로컬에서 켤 때는 false. 실제 도메인(HTTPS)에 올릴 때는 true(또는 줄을 지움 — 운영 기본값이 true)
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # 리버스 프록시(nginx·호스팅 서비스) 뒤에서만 true
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      MAIL_MODE: ${MAIL_MODE:-off}
+      # 처음 한 번 목 이미지를 이만큼 만들어 적재 (0이면 빈 상태로 시작)
+      DEMO_DATA_COUNT: ${DEMO_DATA_COUNT:-300}
+    volumes:
+      - appdata:/data/images
+    ports:
+      - "${APP_PORT:-8080}:3000"
+    restart: unless-stopped
+
+  worker:
+    profiles: ["app"]
+    image: qa-review-app   # app과 같은 이미지(위에서 빌드)
+    command: ["node", "src/worker.mjs"]
+    depends_on:
+      app:
+        condition: service_healthy
+    environment: *app-env
+    volumes:
+      - appdata:/data/images
+    restart: unless-stopped
 
 volumes:
   pgdata:
+  appdata:

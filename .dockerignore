@@ -1,0 +1,17 @@
+# 이미지에 넣지 않는 것 (비밀값·생성 데이터·설치물·개발 기록)
+.git
+.env
+.env.*
+!.env.example
+**/node_modules
+**/dist
+data
+uploads
+captures
+python
+docs
+backend/test
+frontend/e2e
+frontend/test-results
+frontend/playwright-report
+*.log
