@@ -114,7 +114,8 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 | POST /api/assignments/:code/status {to} | 정해진 다음 단계로만. 점검 완료는 미검토가 남으면 거부 | 단계별(아래) |
 | PUT /api/assignments/:code/note | 점검 내용 저장 | 담당자·관리자 |
 | GET /api/assignments/:code/images?filter&verdict&page&pageSize | 서버 페이지네이션(최대 200). filter: all/unreviewed/approved/rejected | 로그인 |
-| PUT /api/assignments/:code/images/:imageKey/review | 승인/반려 저장. 점검중일 때만 | 담당자·관리자 |
+| PUT /api/assignments/:code/images/:imageKey/review | 승인/반려 저장(`reasons`: 반려는 사유 코드 1개 이상, 승인은 없이). 점검중일 때만 | 담당자·관리자 |
+| GET /api/reject-reasons | 반려 사유 선택지(사용 중인 것만, 표시 순서) | 배정 조회 권한 |
 | GET /api/monitoring/time?gapMinutes=5 | 소요 시간 분석(담당자별·배정별·모델·수신 배치). 자리 비움 기준 1~120분 | 관리자 |
 | GET /api/images/:imageKey/thumb|preview|original|heatmap | 이미지·히트맵 파일(이미지 ID 기반, 경로 비노출). 관리자 전부, QA는 자기 배정 이미지만, `ingest_status=DONE`만. `Cache-Control: private` + ETag(304), nosniff, SVG는 CSP sandbox | 로그인 |
 
@@ -493,3 +494,11 @@ Fastify 5, ORM 없이 `pg` 직접 사용. 입력은 라우트별 JSON Schema로 
 - **포트 기본값 변경**: 기본 `docker-compose.yml`의 DB·앱 포트를 `127.0.0.1`에만 연다(앱은 `APP_BIND`로 변경 가능). 이유는 서버에서 이 파일을 그대로 쓰더라도 DB·앱이 인터넷에 노출되지 않는 쪽이 안전한 기본값이기 때문. 로컬 개발(`localhost`)에는 영향이 없다.
 - **검증**: 개발 DB와 격리한 프로젝트로 `DOMAIN=localhost`(Caddy 내장 인증서)로 전체를 띄워 HTTPS·보안 헤더·HTTP→HTTPS 리디렉션·쿠키 Secure·데모 계정 정리·포트 노출·필수값 누락 거부를 확인하고 볼륨까지 지웠다. **실제 서버·도메인에서의 인증서 발급, 백업 복원은 미확인.**
 - **한계**: 서버 1대·DB 1개(이중화·무중단 배포 없음), 백업은 문서의 수동 명령뿐, 실제 모델 미포함.
+
+### 반려 사유 (2026-11-21, 마이그레이션 016)
+- **목적**: 반려가 '왜'인지 남긴다. 반려된 이미지를 다시 만들 때 고칠 점이 되고, 나중에 'AI가 말한 원인 ↔ 사람이 고른 사유'를 비교해 모델(원인 분류)의 정확도를 볼 수 있다.
+- **화면 방식(A안 채택)**: 반려(`R`)를 누르면 사유 상자가 펼쳐지고 AI가 찾은 원인이 미리 골라져 있다 → 숫자키로 고치고 `Enter`. B안(사유 칩을 항상 보여 주고 먼저 고른 뒤 `R`)은 버렸다. 이유: 대부분의 이미지는 승인으로 끝나므로 승인은 지금처럼 키 한 번이어야 하고, 반려는 AI 원인이 맞으면 `R` → `Enter` 두 번으로 끝난다. 항상 보이는 칩은 승인할 때도 패널을 복잡하게 만든다.
+- **사유 목록은 DB(`reject_reasons`)**: 코드는 AI 원인 코드(`detections.reason_code`)와 같게 맞추고, `UNKNOWN`(원인 미분류)은 사람이 고를 사유가 아니라서 빼고 `OTHER`(기타, `requires_comment`)를 더했다. 관리 화면은 아직 없다(필요하면 `active=false`로 '사용 안 함' — 기존 기록의 이름은 계속 보인다).
+- **저장**: `reviews.reasons text[]`. 검수 기록이 쌓기만 하는 구조라 사유도 그 행에 함께 둔다(별도 연결 표 대신 배열: 한 번의 결정에 딸린 값이고 따로 고칠 일이 없어서). 같은 내용 재전송 판단에 사유도 포함하며 순서는 무시한다(정렬해 저장). DB 제약은 '승인에는 사유 없음'만 두고, '반려는 1개 이상'은 서버가 검사한다 — 이 기능 전에 저장된 반려에는 사유가 없기 때문.
+- **서버 검사**: 반려는 사용 중인 사유 1개 이상, 승인에 사유를 보내면 400, 모르는 코드·`UNKNOWN`·중복은 400, `requires_comment` 사유를 골랐는데 코멘트가 공백뿐이면 400.
+- **키 입력**: 상자가 열려 있는 동안 검수 화면·크게 보기의 단축키(A/R/방향키/숫자 확대)는 멈추고 상자가 숫자·`Enter`·`Esc`를 받는다(캡처 단계 리스너, `stopImmediatePropagation`으로 대화상자의 Esc 닫기보다 먼저). 코멘트 입력 중에는 숫자가 글자로 들어가고 `Enter`는 확정, `Shift+Enter`는 줄바꿈. 크게 보기에서는 휠 확대·드래그가 걸린 이미지 영역 밖(하단 막대 위)에 띄운다.
