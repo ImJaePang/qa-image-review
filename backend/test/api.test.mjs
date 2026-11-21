@@ -210,13 +210,53 @@ describe('배정 흐름 (생성 → 점검 → 완료 → 확인)', () => {
     assert.equal(first.status, 200)
     assert.equal(first.body.progress.reviewed, 1)
 
-    const flip = await api('PUT', url, qa1, { status: 'REJECTED', comment: '번복' })
+    const flip = await api('PUT', url, qa1, { status: 'REJECTED', comment: '번복', reasons: ['SHAPE_DISTORTION'] })
     assert.deepEqual([flip.body.progress.approved, flip.body.progress.rejected], [0, 1])
 
-    await api('PUT', url, qa1, { status: 'REJECTED', comment: '번복' }) // 동일 내용
+    await api('PUT', url, qa1, { status: 'REJECTED', comment: '번복', reasons: ['SHAPE_DISTORTION'] }) // 동일 내용
     const { pool } = await import('../src/db.mjs')
     const rows = await pool.query('SELECT status FROM reviews ORDER BY id')
     assert.deepEqual(rows.rows.map((r) => r.status), ['APPROVED', 'REJECTED']) // 3번째 요청은 행을 만들지 않음
+  })
+
+  test('반려 사유: 반려는 1개 이상, 승인은 없이, 모르는 사유 거부, 기타는 코멘트 필수', async () => {
+    const url = `/api/assignments/${code}/images/${keys[0]}/review`
+    const put = (body) => api('PUT', url, qa1, body)
+    const bad = async (body, pattern) => {
+      const r = await put(body)
+      assert.equal(r.status, 400)
+      assert.match(r.body.message, pattern)
+    }
+    await bad({ status: 'REJECTED' }, /하나 이상/)
+    await bad({ status: 'APPROVED', reasons: ['SHAPE_DISTORTION'] }, /승인에는/)
+    await bad({ status: 'REJECTED', reasons: ['NOPE'] }, /알 수 없거나/)
+    await bad({ status: 'REJECTED', reasons: ['UNKNOWN'] }, /알 수 없거나/) // AI 전용 코드는 사람이 고르는 사유가 아니다
+    await bad({ status: 'REJECTED', reasons: ['OTHER'], comment: '  ' }, /기타.*코멘트/)
+    assert.equal((await put({ status: 'REJECTED', reasons: ['SHAPE_DISTORTION', 'SHAPE_DISTORTION'] })).status, 400) // 중복
+
+    const { pool } = await import('../src/db.mjs')
+    const count = async () => Number((await pool.query('SELECT count(*) FROM reviews')).rows[0].count)
+    const before = await count()
+    // 순서만 다른 같은 사유는 같은 내용 → 행을 늘리지 않는다. 사유가 바뀌면 새 행.
+    await put({ status: 'REJECTED', comment: '번복', reasons: ['SHAPE_DISTORTION'] })
+    assert.equal(await count(), before)
+    const r = await put({ status: 'REJECTED', comment: '번복', reasons: ['TEXTURE_ANOMALY', 'SHAPE_DISTORTION'] })
+    assert.deepEqual(r.body.reasons, ['SHAPE_DISTORTION', 'TEXTURE_ANOMALY'])
+    await put({ status: 'REJECTED', comment: '번복', reasons: ['SHAPE_DISTORTION', 'TEXTURE_ANOMALY'] })
+    assert.equal(await count(), before + 1)
+
+    const item = (await api('GET', `/api/assignments/${code}/images?pageSize=1`, qa1)).body.items[0]
+    assert.equal(item.imageId, keys[0])
+    assert.deepEqual(item.review.reasons, ['SHAPE_DISTORTION', 'TEXTURE_ANOMALY'])
+  })
+
+  test('반려 사유 선택지는 사용 중인 것만 순서대로 (기타는 코멘트 필요)', async () => {
+    const r = await api('GET', '/api/reject-reasons', qa1)
+    assert.equal(r.status, 200)
+    assert.equal(r.body.items.length, 7)
+    assert.equal(r.body.items[0].code, 'COMPOSITE_EDGE')
+    assert.deepEqual(r.body.items.at(-1), { code: 'OTHER', label: '기타', requiresComment: true })
+    assert.equal((await api('GET', '/api/reject-reasons', undefined)).status, 401)
   })
 
   test('다음 미검토 위치: 뒤에서 찾고, 없으면 처음부터, 전부 검토했으면 null', async () => {
@@ -229,7 +269,7 @@ describe('배정 흐름 (생성 → 점검 → 완료 → 확인)', () => {
 
   test('나머지를 검수하면 필터와 건수가 맞다', async () => {
     for (const [i, k] of keys.slice(1).entries()) {
-      await api('PUT', `/api/assignments/${code}/images/${k}/review`, qa1, { status: i % 2 ? 'REJECTED' : 'APPROVED' })
+      await api('PUT', `/api/assignments/${code}/images/${k}/review`, qa1, i % 2 ? { status: 'REJECTED', reasons: ['SCALE_ANOMALY'] } : { status: 'APPROVED' })
     }
     const unreviewed = await api('GET', `/api/assignments/${code}/images?filter=unreviewed`, qa1)
     assert.equal(unreviewed.body.total, 0)

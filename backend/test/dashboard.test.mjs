@@ -43,7 +43,7 @@ test('배정하고 검수하면 진행·최근 7일·내 할 일에 반영된다
   await api('POST', `/api/assignments/${code}/status`, qa1, { to: 'IN_REVIEW' })
   const imgs = (await api('GET', `/api/assignments/${code}/images`, qa1)).body.items
   await api('PUT', `/api/assignments/${code}/images/${imgs[0].imageId}/review`, qa1, { status: 'APPROVED', comment: '' })
-  await api('PUT', `/api/assignments/${code}/images/${imgs[1].imageId}/review`, qa1, { status: 'REJECTED', comment: '' })
+  await api('PUT', `/api/assignments/${code}/images/${imgs[1].imageId}/review`, qa1, { status: 'REJECTED', comment: '', reasons: ['TEXTURE_ANOMALY'] })
 
   const a = (await api('GET', '/api/dashboard', admin)).body
   assert.equal(a.unassignedTargets.SUSPECT + a.unassignedTargets.DEFECT, 2) // 6장 중 4장 배정

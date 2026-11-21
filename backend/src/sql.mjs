@@ -18,7 +18,7 @@ export const RULE_OF_VERDICT = 'LEFT JOIN rules ru ON ru.id = v.rule_id'
 /** 배정 안에서 이미지의 현재 검수 상태 (reviews 쌓기 방식 → 최신 한 행) */
 export const currentReview = (assignmentIdExpr, imageIdExpr) => `
   LEFT JOIN LATERAL (
-    SELECT reviewer_id, status, comment, decided_at FROM reviews
+    SELECT reviewer_id, status, comment, reasons, decided_at FROM reviews
     WHERE assignment_id = ${assignmentIdExpr} AND image_id = ${imageIdExpr}
     ORDER BY decided_at DESC, id DESC LIMIT 1
   ) rc ON true`

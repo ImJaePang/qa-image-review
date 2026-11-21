@@ -21,10 +21,11 @@ before(async () => {
   code = made.body.id
   await api('POST', `/api/assignments/${code}/status`, qa1, { to: 'IN_REVIEW' })
   const imgs = (await api('GET', `/api/assignments/${code}/images`, qa1)).body.items
-  const review = (img, status, comment) => api('PUT', `/api/assignments/${code}/images/${img.imageId}/review`, qa1, { status, comment })
+  const review = (img, status, comment, reasons = []) =>
+    api('PUT', `/api/assignments/${code}/images/${img.imageId}/review`, qa1, { status, comment, reasons })
   await review(imgs[0], 'APPROVED', '문제 없음')
-  await review(imgs[1], 'REJECTED', '합성 경계 이상')
-  await review(imgs[0], 'REJECTED', '다시 보니 반려') // 번복
+  await review(imgs[1], 'REJECTED', '합성 경계 이상', ['COMPOSITE_EDGE', 'LIGHTING_MISMATCH'])
+  await review(imgs[0], 'REJECTED', '다시 보니 반려', ['OTHER']) // 번복
 })
 after(async () => app.close())
 
@@ -38,6 +39,8 @@ test('내 이력: 번복도 한 줄씩, 가장 최근 결정만 isCurrent', asyn
     ['REJECTED', '합성 경계 이상', true],
     ['APPROVED', '문제 없음', false], // 이후에 번복됨
   ])
+  // 반려 사유는 표시 순서대로 이름과 함께, 승인은 빈 배열
+  assert.deepEqual(r.items.map((x) => x.reasons.map((y) => y.label)), [['기타'], ['합성 경계 이상', '조명·음영 불일치'], []])
   const first = r.items[0]
   assert.equal(first.assignmentId, code)
   assert.equal(first.assignmentTitle, '이력 시험')

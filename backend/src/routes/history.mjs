@@ -49,6 +49,8 @@ export default async function historyRoutes(app) {
       const [list, total, counts] = await Promise.all([
         pool.query(
           `SELECT r.id, r.status, r.comment, r.decided_at, u.name AS reviewer_name,
+                  (SELECT COALESCE(json_agg(json_build_object('code', rr.code, 'label', rr.label) ORDER BY rr.sort_order), '[]'::json)
+                   FROM reject_reasons rr WHERE rr.code = ANY(r.reasons)) AS reasons,
                   a.code AS assignment_code, a.title AS assignment_title,
                   i.image_key, i.file_name, mr.overall_score, v.result AS verdict,
                   NOT EXISTS (SELECT 1 FROM reviews r2 WHERE r2.assignment_id = r.assignment_id AND r2.image_id = r.image_id
@@ -67,6 +69,7 @@ export default async function historyRoutes(app) {
           id: String(r.id),
           status: r.status,
           comment: r.comment,
+          reasons: r.reasons, // [{ code, label }] 반려 사유 (사용 안 함이 된 사유도 이름을 보여 준다)
           decidedAt: r.decided_at,
           reviewerName: r.reviewer_name,
           assignmentId: r.assignment_code,

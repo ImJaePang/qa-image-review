@@ -58,14 +58,42 @@ const toItem = (r) => ({
   review: {
     status: r.review_status ?? 'NONE', // NONE = 미검토
     comment: r.review_comment ?? '',
+    reasons: r.review_reasons ?? [], // 반려 사유 코드 (승인·미검토는 빈 배열)
     reviewedAt: r.decided_at ?? null,
     reviewerName: r.reviewer_name ?? null,
   },
 })
 
+/**
+ * 반려 사유 검사: 반려는 사용 중인 사유를 1개 이상, 승인은 사유 없이.
+ * 코멘트가 필요한 사유(기타)를 골랐으면 코멘트가 있어야 한다.
+ */
+async function checkReasons(db, status, reasons, comment) {
+  if (status === 'APPROVED') {
+    if (reasons.length) throw httpError(400, '승인에는 반려 사유를 넣을 수 없습니다.')
+    return
+  }
+  if (!reasons.length) throw httpError(400, '반려 사유를 하나 이상 고르세요.')
+  const { rows } = await db.query(
+    'SELECT code, label, requires_comment FROM reject_reasons WHERE active AND code = ANY($1)',
+    [reasons],
+  )
+  if (rows.length !== reasons.length) throw httpError(400, '알 수 없거나 사용하지 않는 반려 사유입니다.')
+  const needs = rows.find((r) => r.requires_comment)
+  if (needs && !comment.trim()) throw httpError(400, `‘${needs.label}’ 사유는 코멘트를 적어야 합니다.`)
+}
+
 export default async function imageRoutes(app) {
   app.addHook('onRequest', app.authenticate)
   app.addHook('onRequest', requireAnyPermission(['assignment.view', 'my_assignment.view']))
+
+  // 반려 사유 선택지 (사용 중인 것만, 표시 순서대로). 목록은 DB(reject_reasons)에서 관리한다.
+  app.get('/reject-reasons', async () => {
+    const { rows } = await pool.query(
+      'SELECT code, label, requires_comment FROM reject_reasons WHERE active ORDER BY sort_order, code',
+    )
+    return { items: rows.map((r) => ({ code: r.code, label: r.label, requiresComment: r.requires_comment })) }
+  })
 
   // 배정의 이미지 페이지 조회 (검수 화면 정렬 순서 = position)
   app.get(
@@ -92,7 +120,7 @@ export default async function imageRoutes(app) {
           `SELECT i.image_key, i.file_name, i.width, i.height, i.original_path, i.preview_path, i.thumb_path,
                   mr.model_version, mr.overall_score, mr.heatmap_path,
                   v.result AS verdict, v.reasons,
-                  rc.status AS review_status, rc.comment AS review_comment, rc.decided_at,
+                  rc.status AS review_status, rc.comment AS review_comment, rc.reasons AS review_reasons, rc.decided_at,
                   (SELECT name FROM users WHERE id = rc.reviewer_id) AS reviewer_name,
                   COALESCE((SELECT json_agg(json_build_object('x', d.x, 'y', d.y, 'width', d.width, 'height', d.height,
                                                               'score', d.score, 'reasonCode', d.reason_code) ORDER BY d.score, d.id)
@@ -168,16 +196,25 @@ export default async function imageRoutes(app) {
           properties: {
             status: { type: 'string', enum: ['APPROVED', 'REJECTED'] },
             comment: { type: 'string', maxLength: 1000, default: '' },
+            reasons: {
+              type: 'array',
+              maxItems: 20,
+              uniqueItems: true,
+              items: { type: 'string', maxLength: 40 },
+              default: [],
+            },
           },
         },
       },
     },
     async (req) => {
       const { status, comment } = req.body
+      const reasons = [...req.body.reasons].sort()
       return tx(async (db) => {
         const a = await findAssignment(db, req.params.code, true)
         if (!canAct(req.user, a)) throw httpError(403, '담당자만 검수할 수 있습니다.')
         if (a.status !== 'IN_REVIEW') throw httpError(409, '점검중 상태에서만 검수할 수 있습니다.')
+        await checkReasons(db, status, reasons, comment)
 
         const img = await db.query(
           `SELECT i.id FROM assignment_images ai JOIN images i ON i.id = ai.image_id
@@ -189,15 +226,17 @@ export default async function imageRoutes(app) {
 
         // 직전과 같은 내용이면 행을 늘리지 않는다 (소요 시간 분석에 노이즈가 되므로)
         const last = await db.query(
-          `SELECT status, comment FROM reviews WHERE assignment_id = $1 AND image_id = $2
+          `SELECT status, comment, reasons FROM reviews WHERE assignment_id = $1 AND image_id = $2
            ORDER BY decided_at DESC, id DESC LIMIT 1`,
           [a.id, imageId],
         )
-        const same = last.rowCount && last.rows[0].status === status && last.rows[0].comment === comment
+        const prev = last.rows[0]
+        const same =
+          prev && prev.status === status && prev.comment === comment && [...prev.reasons].sort().join() === reasons.join()
         if (!same) {
           await db.query(
-            `INSERT INTO reviews (assignment_id, image_id, reviewer_id, status, comment) VALUES ($1, $2, $3, $4, $5)`,
-            [a.id, imageId, req.user.sub, status, comment],
+            `INSERT INTO reviews (assignment_id, image_id, reviewer_id, status, comment, reasons) VALUES ($1, $2, $3, $4, $5, $6)`,
+            [a.id, imageId, req.user.sub, status, comment, reasons],
           )
         }
         const prog = await db.query(
@@ -207,7 +246,7 @@ export default async function imageRoutes(app) {
            FROM review_current WHERE assignment_id = $1`,
           [a.id],
         )
-        return { imageId: req.params.imageKey, status, comment, progress: prog.rows[0] }
+        return { imageId: req.params.imageKey, status, comment, reasons, progress: prog.rows[0] }
       })
     },
   )

@@ -127,7 +127,7 @@ export default async function imageListRoutes(app) {
         previewUrl: fileUrl(r.image_key, 'preview'),
         originalUrl: fileUrl(r.image_key, 'original'),
         heatmapUrl: r.heatmap_path ? fileUrl(r.image_key, 'heatmap') : null,
-        review: { status: 'NONE', comment: '', reviewedAt: null, reviewerName: null }, // 검수는 배정 안에서만 한다
+        review: { status: 'NONE', comment: '', reasons: [], reviewedAt: null, reviewerName: null }, // 검수는 배정 안에서만 한다
       }
     },
   )

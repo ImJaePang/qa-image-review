@@ -117,7 +117,7 @@ test('검수 화면: 정렬·필터·판정·건수가 같은 기준', async () 
   const code = made.body.id
   assert.equal((await api('POST', `/api/assignments/${code}/status`, qa1, { to: 'IN_REVIEW' })).status, 200)
   const imgs = (await api('GET', `/api/assignments/${code}/images`, qa1)).body.items
-  const review = (img, status) => api('PUT', `/api/assignments/${code}/images/${img.imageId}/review`, qa1, { status, comment: '' })
+  const review = (img, status) => api('PUT', `/api/assignments/${code}/images/${img.imageId}/review`, qa1, { status, comment: '', reasons: status === 'REJECTED' ? ['TEXTURE_ANOMALY'] : [] })
   await review(imgs[0], 'APPROVED') // 0.2
   await review(imgs[2], 'REJECTED') // 0.4
 
