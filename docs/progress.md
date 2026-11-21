@@ -10,7 +10,7 @@
 
 | 항목 | 상태 |
 |---|---|
-| GitHub | https://github.com/ImJaePang/qa-image-review (공개). `c584237`까지 푸시됨. **2026-11-21 반려 사유 작업은 아직 커밋 전**(`git status -sb`로 확인) |
+| GitHub | https://github.com/ImJaePang/qa-image-review (공개). `c584237`까지 푸시됨. **2026-11-21 반려 사유 커밋 3개(`2d6e949`·`242e7d2`·`1ffc3c1`)는 푸시 전**(`git status -sb`로 확인) |
 | 테스트 | 백엔드 254 · 프론트 단위 79 · 화면(Playwright) 12 · 파이썬 17, 모두 통과 (명령은 README '테스트') |
 | 데모 계정 | `admin@example.com`(관리자) · `qa1@example.com`(QA) / `1234` — **로컬 데모 전용**. 공개 서버는 `DEMO_MODE=false` + `ADMIN_PASSWORD`로 시작 때 정리 |
 | 모델 | 기본은 목(mock). 실제 PatchCore는 `python/README.md`, 기준선 AUROC 0.683 |
