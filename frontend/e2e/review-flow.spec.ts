@@ -62,9 +62,32 @@ test('배정 → 점검 시작 → 승인/반려 → 점검 완료 → 확인 �
   await expect(position(2)).toBeVisible()
   await page.keyboard.press('ArrowLeft')
   await expect(position(1)).toBeVisible()
+  // 반려(R)는 사유 상자를 열고, 사유를 골라 Enter로 확정해야 저장된다. Esc는 취소.
+  const box = dialog.getByTestId('reject-box')
+  const reject = async (done: number, first: boolean) => {
+    await page.keyboard.press('r')
+    await expect(box).toBeVisible()
+    if (first) {
+      await page.keyboard.press('Escape') // 취소: 저장되지 않고 대화상자도 닫히지 않는다
+      await expect(box).toBeHidden()
+      await expect(reviewTab).toContainText(`(${done}/${COUNT})`)
+      await page.keyboard.press('r')
+      // AI 원인이 미리 골라져 있지 않으면 숫자키로 하나 고른다
+      if ((await box.locator('[aria-pressed="true"]').count()) === 0) await page.keyboard.press('2')
+      await page.keyboard.press('Enter')
+    } else {
+      await page.keyboard.press('7') // 기타: 코멘트가 없으면 확정되지 않는다
+      await page.keyboard.press('Enter')
+      await expect(box.getByRole('alert')).toContainText('코멘트')
+      await box.getByLabel('코멘트').fill('궤도 바퀴 수가 맞지 않음')
+      await page.keyboard.press('Enter')
+    }
+    await expect(box).toBeHidden()
+  }
   const keys = ['a', 'a', 'r', 'a', 'r']
   for (const [i, key] of keys.entries()) {
-    await page.keyboard.press(key)
+    if (key === 'r') await reject(i, i === 2)
+    else await page.keyboard.press(key)
     await expect(reviewTab).toContainText(`(${i + 1}/${COUNT})`)
   }
 
@@ -80,6 +103,8 @@ test('배정 → 점검 시작 → 승인/반려 → 점검 완료 → 확인 �
   await expect(page.getByRole('button', { name: /^승인\s*3$/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /^반려\s*2$/ })).toBeVisible()
   await expect(page.getByRole('row', { name: new RegExp(TITLE) })).toHaveCount(COUNT)
+  // 반려 사유와 코멘트가 이력에 남는다
+  await expect(page.getByRole('row', { name: /궤도 바퀴 수가 맞지 않음/ })).toContainText('기타')
   await logout(page)
 
   // ── 관리자: 확인 완료 ──

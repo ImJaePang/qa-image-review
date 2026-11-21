@@ -45,7 +45,7 @@ export function HistoryPage() {
   const total = data?.total ?? 0
   const counts = data?.statusCounts
   const showReviewer = effectiveScope === 'all'
-  const cols = showReviewer ? 7 : 6
+  const cols = showReviewer ? 8 : 7
 
   const chip = (value: StatusFilter, label: string, n?: number) => (
     <button
@@ -119,6 +119,7 @@ export function HistoryPage() {
               <TableHead>배정</TableHead>
               <TableHead>AI 판정</TableHead>
               <TableHead>결과</TableHead>
+              <TableHead>반려 사유</TableHead>
               <TableHead>코멘트</TableHead>
               {showReviewer && <TableHead>검수자</TableHead>}
             </TableRow>
@@ -169,6 +170,19 @@ export function HistoryPage() {
                     <ReviewMark status={r.status} />
                     {!r.isCurrent && <Badge variant="outline">번복됨</Badge>}
                   </span>
+                </TableCell>
+                <TableCell>
+                  {r.reasons.length ? (
+                    <span className="flex max-w-64 flex-wrap gap-1">
+                      {r.reasons.map((x) => (
+                        <span key={x.code} className="rounded-full border px-2 py-0.5 text-[11px] whitespace-nowrap">
+                          {x.label}
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">-</span>
+                  )}
                 </TableCell>
                 <TableCell className="max-w-64 truncate text-sm text-muted-foreground">{r.comment || '-'}</TableCell>
                 {showReviewer && <TableCell className="text-sm">{r.reviewerName}</TableCell>}

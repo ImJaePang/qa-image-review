@@ -24,6 +24,8 @@ interface Props {
   onNext: () => void
   canReview: boolean
   onDecide: (status: '승인' | '반려') => void
+  /** 반려 사유 상자 (열려 있으면 화면 위에 띄우고, 단축키는 상자가 받는다) */
+  reject?: React.ReactNode
   /** 보기 전용(이미지 목록): 검수 상태와 승인/반려 버튼을 숨긴다 */
   browse?: boolean
 }
@@ -46,7 +48,7 @@ export function ImageLightbox(props: Props) {
   )
 }
 
-function LightboxBody({ onClose, img, overlay, setOverlay, opacity, hot, onHot, index, total, onPrev, onNext, canReview, onDecide, browse }: Props) {
+function LightboxBody({ onClose, img, overlay, setOverlay, opacity, hot, onHot, index, total, onPrev, onNext, canReview, onDecide, browse, reject }: Props) {
   const stageRef = useRef<HTMLDivElement>(null)
   const [stage, setStage] = useState({ w: 0, h: 0 })
   const [view, setView] = useState<View>(FIT)
@@ -91,6 +93,7 @@ function LightboxBody({ onClose, img, overlay, setOverlay, opacity, hot, onHot, 
       const t = e.target as HTMLElement
       if (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT') return
       if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (reject) return // 반려 사유 상자가 숫자·Enter·Esc를 받는다
       const k = e.key.toLowerCase()
       if (k === 'z') onClose()
       else if (k === '+' || k === '=') zoomCenter(BUTTON_STEP)
@@ -188,7 +191,9 @@ function LightboxBody({ onClose, img, overlay, setOverlay, opacity, hot, onHot, 
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-t border-white/10 bg-neutral-900 px-4 py-2">
+      <div className="relative flex flex-wrap items-center gap-3 border-t border-white/10 bg-neutral-900 px-4 py-2">
+        {/* 반려 사유 상자: 이미지 영역(휠 확대·드래그) 밖인 하단 막대에 붙여 위로 띄운다 */}
+        {reject && <div className="absolute right-3 bottom-full z-10 mb-3">{reject}</div>}
         <div className="inline-flex items-center overflow-hidden rounded-lg border border-white/10" role="group" aria-label="확대 조절">
           <DarkButton className="rounded-none border-0" onClick={() => zoomCenter(1 / BUTTON_STEP)} aria-label="축소">
             −
@@ -218,10 +223,10 @@ function LightboxBody({ onClose, img, overlay, setOverlay, opacity, hot, onHot, 
         {!browse && !canReview && <span className="text-xs text-neutral-400">‘점검중’ 상태에서 담당자만 검수할 수 있습니다.</span>}
         {!browse && (
           <>
-            <Button variant="destructive" size="sm" disabled={!canReview} onClick={() => onDecide('반려')}>
+            <Button variant="destructive" size="sm" disabled={!canReview || !!reject} onClick={() => onDecide('반려')}>
               <X className="size-4" /> 반려 <Kbd>R</Kbd>
             </Button>
-            <Button size="sm" disabled={!canReview} onClick={() => onDecide('승인')}>
+            <Button size="sm" disabled={!canReview || !!reject} onClick={() => onDecide('승인')}>
               <Check className="size-4" /> 승인 <Kbd>A</Kbd>
             </Button>
           </>

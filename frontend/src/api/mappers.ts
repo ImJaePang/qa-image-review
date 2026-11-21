@@ -38,7 +38,7 @@ export interface ApiAssignment extends Omit<Assignment, 'status'> {
 export interface ApiImageItem extends Omit<ImageItem, 'verdict' | 'review' | 'heatmapUrl'> {
   verdict: VerdictCode
   heatmapUrl: string | null
-  review: { status: keyof typeof REVIEW_KO; comment: string; reviewedAt: string | null; reviewerName: string | null }
+  review: { status: keyof typeof REVIEW_KO; comment: string; reasons: string[]; reviewedAt: string | null; reviewerName: string | null }
 }
 
 export const toListItem = (a: ApiListItem): AssignmentListItem => ({ ...a, status: STATUS_KO[a.status] })

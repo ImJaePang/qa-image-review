@@ -21,6 +21,13 @@ import {
   type VerdictCode,
 } from './mappers'
 
+/** 반려 사유 선택지 한 개 (DB reject_reasons). requiresComment: 고르면 코멘트 필수(기타) */
+export interface RejectReason {
+  code: string
+  label: string
+  requiresComment: boolean
+}
+
 /** 대시보드(홈). 판정·상태 키는 서버의 영문 코드 그대로 두고 한글은 화면에서 붙인다 */
 export interface Dashboard {
   /** 이미지 분포는 전체/내 것, 배정·검수 진행·최근 7일은 전체/내 것 (권한에 따라 다르다) */
@@ -488,9 +495,12 @@ export const api = {
       statusCounts: { 승인: r.statusCounts.APPROVED, 반려: r.statusCounts.REJECTED },
     }
   },
-  reviewImage: (id: string, imageId: string, status: '승인' | '반려', comment: string) =>
+  /** 반려는 사유 코드를 1개 이상 함께 보낸다 (승인은 빈 배열) */
+  reviewImage: (id: string, imageId: string, status: '승인' | '반려', comment: string, reasons: string[] = []) =>
     put<{ progress: { reviewed: number; approved: number; rejected: number } }>(
       `/assignments/${id}/images/${imageId}/review`,
-      { status: REVIEW_CODE[status], comment },
+      { status: REVIEW_CODE[status], comment, reasons },
     ),
+  /** 반려 사유 선택지 (사용 중인 것만, 표시 순서대로) */
+  listRejectReasons: () => get<{ items: RejectReason[] }>('/reject-reasons').then((r) => r.items),
 }

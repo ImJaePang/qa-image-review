@@ -40,6 +40,8 @@ export type ReviewStatus = '미검토' | '승인' | '반려'
 export interface ImageReview {
   status: ReviewStatus
   comment: string
+  /** 반려 사유 코드 (DB reject_reasons.code). 승인·미검토는 빈 배열 */
+  reasons?: string[]
   reviewedAt?: string | null
   /** 마지막으로 검수한 사람 (미검토면 없음) */
   reviewerName?: string | null
@@ -74,6 +76,8 @@ export interface ReviewHistoryItem {
   id: string
   status: '승인' | '반려'
   comment: string
+  /** 반려 사유 (표시 순서대로). 승인은 빈 배열 */
+  reasons: { code: string; label: string }[]
   decidedAt: string
   reviewerName: string
   assignmentId: string

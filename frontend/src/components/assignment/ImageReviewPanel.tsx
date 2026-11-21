@@ -19,6 +19,9 @@ import { ReasonBadge, ReviewMark, VerdictBadge } from './badges'
 import { NumberBadge } from './BoxLayer'
 import { ImageLightbox } from './ImageLightbox'
 import { ImageViewer, type ViewMode } from './ImageViewer'
+import { RejectReasonBox } from './RejectReasonBox'
+import { aiReasonCodes, startReject, type RejectDraft } from '@/lib/rejectReasons'
+import { useRejectReasons } from '@/hooks/useRejectReasons'
 
 const VIEW_MODE_KEY = 'qa.reviewViewMode'
 const PREFETCH_AHEAD = 2 // 원본 고정일 때 현재 이미지 뒤로 미리 받을 장수 (전체를 받지 않는다)
@@ -85,6 +88,9 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
   }
   const { data: counts } = useQuery({ queryKey: ['image-counts', aid, verdictFilter], queryFn: () => api.imageCounts(aid, verdictParam) })
   const [draft, setDraft] = useState<{ id: string; text: string } | null>(null)
+  // 반려 사유 상자: 반려(R)를 누르면 열리고, 사유를 골라 확정해야 저장된다. 다른 이미지로 가면 닫힌 것으로 본다
+  const [rejecting, setRejecting] = useState<RejectDraft | null>(null)
+  const { data: reasonOptions } = useRejectReasons()
 
   // 가상 스크롤 목록: 전체 장수만큼 행을 잡고, 보이는 행이 속한 페이지(50장 단위)만 서버에서 불러온다.
   const listRef = useRef<HTMLDivElement>(null)
@@ -128,6 +134,9 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
   const current = at ?? lastShown.current // 다른 페이지를 불러오는 동안은 직전 이미지를 보여 준다
   const review = current?.review
   const comment = draft && current && draft.id === current.imageId ? draft.text : (review?.comment ?? '')
+  const setComment = (text: string) => current && setDraft({ id: current.imageId, text })
+  const rejectOpen = !!rejecting && !!current && rejecting.imageId === current.imageId
+  const optionCodes = reasonOptions?.map((o) => o.code) ?? []
 
   useEffect(() => {
     if (total) virt.scrollToIndex(Math.min(index, total - 1), { align: 'auto' })
@@ -162,12 +171,12 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
     return prev
   }
   const mutate = useMutation({
-    mutationFn: (v: { imageId: string; status: '승인' | '반려'; comment: string }) =>
-      api.reviewImage(aid, v.imageId, v.status, v.comment),
+    mutationFn: (v: { imageId: string; status: '승인' | '반려'; comment: string; reasons: string[] }) =>
+      api.reviewImage(aid, v.imageId, v.status, v.comment, v.reasons),
     onMutate: async (v) => {
       await qc.cancelQueries({ queryKey: ['images', aid] })
       return {
-        prev: patchReview(v.imageId, { status: v.status, comment: v.comment, reviewedAt: new Date().toISOString(), reviewerName: me?.name ?? null }),
+        prev: patchReview(v.imageId, { status: v.status, comment: v.comment, reasons: v.reasons, reviewedAt: new Date().toISOString(), reviewerName: me?.name ?? null }),
       }
     },
     onError: (e: Error, _v, ctx) => {
@@ -180,10 +189,18 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
     },
   })
 
-  const decide = async (status: '승인' | '반려') => {
+  /** 승인은 바로 저장, 반려는 사유 상자를 연다(사유를 골라 확정하면 commit) */
+  const decide = (status: '승인' | '반려') => {
     if (!canReview || !current) return
-    const saving = mutate.mutateAsync({ imageId: current.imageId, status, comment }).catch(() => undefined)
+    if (status === '승인') return commit('승인', [])
+    if (!reasonOptions) return toast.error('반려 사유 목록을 불러오는 중입니다. 잠시 뒤 다시 시도하세요.')
+    setRejecting(startReject(current, reasonOptions))
+  }
+  const commit = async (status: '승인' | '반려', reasons: string[]) => {
+    if (!canReview || !current) return
+    const saving = mutate.mutateAsync({ imageId: current.imageId, status, comment, reasons }).catch(() => undefined)
     setDraft(null)
+    setRejecting(null)
     // 바로 다음 이미지가 불러와져 있고 미검토면 그대로 이동, 아니면 서버에 다음 미검토 위치를 묻는다
     const nextItem = itemAt(index + 1)
     if (nextItem?.review.status === '미검토') return setIndex(index + 1)
@@ -205,6 +222,7 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
       const t = e.target as HTMLElement
       if (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT') return
       if (zoomOpen) return // 확대 화면이 단축키를 받는다
+      if (rejectOpen) return // 반려 사유 상자가 숫자·Enter·Esc를 받는다
       if (e.ctrlKey || e.metaKey || e.altKey) return
       if (e.key.toLowerCase() === 'z') setZoomOpen(true)
       else if (e.key === 'ArrowRight') setIndex((i) => Math.min(i + 1, total - 1))
@@ -219,7 +237,7 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
       onKey(e)
       if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
         const t = e.target as HTMLElement
-        if (t.tagName !== 'TEXTAREA' && t.tagName !== 'INPUT' && !zoomOpen && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (t.tagName !== 'TEXTAREA' && t.tagName !== 'INPUT' && !zoomOpen && !rejectOpen && !e.ctrlKey && !e.metaKey && !e.altKey) {
           e.preventDefault()
           e.stopPropagation()
         }
@@ -428,18 +446,40 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
           <p className="flex items-center justify-between text-xs font-semibold">
             검수 결과 <ReviewMark status={review?.status ?? '미검토'} />
           </p>
-          <Textarea
-            placeholder={canReview ? '코멘트 (선택)' : '코멘트 없음'}
-            value={comment}
-            disabled={!canReview}
-            onChange={(e) => setDraft({ id: current.imageId, text: e.target.value })}
-            className="min-h-20 text-sm"
-          />
-          <div className="grid grid-cols-2 gap-2">
-            <Button disabled={!canReview} onClick={() => decide('승인')}>
+          {review?.status === '반려' && !!review.reasons?.length && !rejectOpen && (
+            <div className="flex flex-wrap gap-1" data-testid="review-reasons">
+              {review.reasons.map((c) => (
+                <span key={c} className="rounded-full border px-2 py-0.5 text-[11px]">
+                  {reasonOptions?.find((o) => o.code === c)?.label ?? c}
+                </span>
+              ))}
+            </div>
+          )}
+          {rejectOpen && reasonOptions && !zoomOpen ? (
+            <RejectReasonBox
+              options={reasonOptions}
+              draft={rejecting!}
+              onChange={setRejecting}
+              comment={comment}
+              onComment={setComment}
+              onCancel={() => setRejecting(null)}
+              onConfirm={(reasons) => commit('반려', reasons)}
+              aiCodes={aiReasonCodes(current, optionCodes)}
+            />
+          ) : (
+            <Textarea
+              placeholder={canReview ? '코멘트 (선택)' : '코멘트 없음'}
+              value={comment}
+              disabled={!canReview}
+              onChange={(e) => setComment(e.target.value)}
+              className="min-h-20 text-sm"
+            />
+          )}
+          <div className={cn('grid grid-cols-2 gap-2', rejectOpen && 'opacity-45')}>
+            <Button disabled={!canReview || rejectOpen} onClick={() => decide('승인')}>
               <Check className="size-4" /> 승인
             </Button>
-            <Button variant="destructive" disabled={!canReview} onClick={() => decide('반려')}>
+            <Button variant="destructive" disabled={!canReview || rejectOpen} onClick={() => decide('반려')}>
               <X className="size-4" /> 반려
             </Button>
           </div>
@@ -470,6 +510,21 @@ export function ImageReviewPanel({ assignment, canReview }: { assignment: Assign
         onNext={() => setIndex((i) => Math.min(i + 1, total - 1))}
         canReview={canReview}
         onDecide={decide}
+        reject={
+          rejectOpen && reasonOptions ? (
+            <RejectReasonBox
+              className="w-96 bg-card shadow-xl"
+              options={reasonOptions}
+              draft={rejecting!}
+              onChange={setRejecting}
+              comment={comment}
+              onComment={setComment}
+              onCancel={() => setRejecting(null)}
+              onConfirm={(reasons) => commit('반려', reasons)}
+              aiCodes={aiReasonCodes(current, optionCodes)}
+            />
+          ) : null
+        }
       />
     </div>
   )
