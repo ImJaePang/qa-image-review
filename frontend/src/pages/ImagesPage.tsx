@@ -10,6 +10,7 @@ import { ImageLightbox } from '@/components/assignment/ImageLightbox'
 import { api } from '@/api'
 import { fmtDate } from '@/lib/domain'
 import { DEFAULT_PAGE_SIZE } from '@/lib/paging'
+import { globalIndex, stepPaged } from '@/lib/pagedNav'
 import type { Overlay } from '@/lib/overlay'
 import type { Verdict } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -35,7 +36,7 @@ export function ImagesPage() {
     return () => clearTimeout(t)
   }, [q])
 
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, isPlaceholderData } = useQuery({
     queryKey: ['image-catalog', { verdict, assigned, sort, q: debouncedQ, page, pageSize }],
     queryFn: () => api.listImageCatalog({ verdict: verdict === 'all' ? undefined : verdict, assigned, sort, q: debouncedQ || undefined, page, pageSize }),
     placeholderData: keepPreviousData,
@@ -44,16 +45,34 @@ export function ImagesPage() {
   const total = data?.total ?? 0
   const counts = data?.verdictCounts
 
-  // 크게 보기: 이 쪽의 이미지를 이전/다음으로 넘겨 본다 (보기 전용)
-  const [view, setView] = useState<number | null>(null)
+  // 크게 보기 (보기 전용): 이전/다음으로 넘기다 쪽의 끝에 닿으면 옆 쪽을 불러와 창을 연 채로 이어 본다.
+  // 보고 있는 이미지는 위치가 아니라 이미지 번호(key)로 기억한다. 옆 쪽으로 넘어갈 때는 edge(새 쪽의 처음/끝)를 적어 두고,
+  // 그 쪽이 도착하면 그 자리의 이미지가 된다. 도착 전에는 지금 이미지와 위치(pos)를 그대로 보여 준다.
+  const [view, setView] = useState<{ key: string; edge: 'first' | 'last' | null; pos: number } | null>(null)
   const [overlay, setOverlay] = useState<Overlay>('both')
   const [hot, setHot] = useState<number | null>(null)
-  const viewKey = view !== null ? rows[view]?.imageKey : undefined
+  const fresh = !!data && !isPlaceholderData
+  const edgeRow = view?.edge && fresh ? (view.edge === 'first' ? rows[0] : rows[rows.length - 1]) : undefined
+  const viewKey = edgeRow?.imageKey ?? view?.key
+  const waiting = !!view?.edge && !fresh
+  const viewIdx = viewKey && !waiting ? rows.findIndex((r) => r.imageKey === viewKey) : -1
+  const viewPos = data && viewIdx >= 0 ? globalIndex({ page: data.page, idx: viewIdx }, data.pageSize) : (view?.pos ?? 0)
   const detail = useQuery({ queryKey: ['image-detail', viewKey], queryFn: () => api.getImageDetail(viewKey!), enabled: !!viewKey, placeholderData: keepPreviousData })
+
+  const openView = (key: string) => setView({ key, edge: null, pos: 0 })
+  const step = (dir: 1 | -1) => {
+    if (!view || !data || viewIdx < 0) return
+    const next = stepPaged({ page: data.page, idx: viewIdx }, dir, rows.length, total, data.pageSize)
+    if (!next) return
+    if ('idx' in next) return openView(rows[next.idx].imageKey)
+    setView({ key: viewKey!, edge: next.edge, pos: viewPos })
+    setPage(next.page)
+  }
+  const closeView = () => setView(null)
 
   const reset = () => {
     setPage(1)
-    setView(null)
+    closeView()
   }
   const chip = (value: Verdict | 'all', label: string, n?: number) => (
     <button
@@ -74,7 +93,7 @@ export function ImagesPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold">이미지 목록</h1>
-        <p className="text-sm text-muted-foreground">수신·판정이 끝난 이미지를 판정과 배정 여부로 찾아봅니다. 행을 누르면 크게 보고, 이전/다음으로 넘겨 볼 수 있습니다.</p>
+        <p className="text-sm text-muted-foreground">수신·판정이 끝난 이미지를 판정과 배정 여부로 찾아봅니다. 행을 누르면 크게 보고, 이전/다음으로 쪽을 넘어 계속 볼 수 있습니다.</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3">
@@ -167,8 +186,8 @@ export function ImagesPage() {
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((r, i) => (
-              <TableRow key={r.imageKey} className="cursor-pointer" onClick={() => setView(i)}>
+            {rows.map((r) => (
+              <TableRow key={r.imageKey} className="cursor-pointer" onClick={() => openView(r.imageKey)}>
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <img src={r.thumbUrl} alt="" loading="lazy" className="aspect-video w-20 rounded border bg-muted object-cover" />
@@ -210,7 +229,7 @@ export function ImagesPage() {
         pageSize={pageSize}
         onPage={(p) => {
           setPage(p)
-          setView(null)
+          closeView()
         }}
         onPageSize={(n) => {
           setPageSize(n)
@@ -218,12 +237,12 @@ export function ImagesPage() {
         }}
       />
 
-      {detail.data && view !== null && (
+      {detail.data && viewKey && (
         <ImageLightbox
           open
           browse
           onClose={() => {
-            setView(null)
+            closeView()
             setHot(null)
           }}
           img={detail.data}
@@ -232,10 +251,10 @@ export function ImagesPage() {
           opacity={60}
           hot={hot}
           onHot={setHot}
-          index={view}
-          total={rows.length}
-          onPrev={() => setView((v) => (v === null ? v : Math.max(v - 1, 0)))}
-          onNext={() => setView((v) => (v === null ? v : Math.min(v + 1, rows.length - 1)))}
+          index={viewPos}
+          total={total}
+          onPrev={() => step(-1)}
+          onNext={() => step(1)}
           canReview={false}
           onDecide={() => undefined}
         />

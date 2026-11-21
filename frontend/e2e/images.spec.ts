@@ -44,3 +44,43 @@ test('이미지 목록: 판정 필터·정렬·검색·크게 보기', async ({ 
   await page.keyboard.press('Escape')
   await expect(stage).toBeHidden()
 })
+
+// 쪽의 끝에서 '다음'을 누르면 다음 쪽을 불러와 크게 보기를 연 채로 이어 본다.
+// 픽스처가 12장뿐이라 목록 요청의 쪽 크기를 5로 바꿔(5·5·2) 쪽 경계를 만든다.
+test('이미지 목록: 크게 보기는 쪽을 넘어도 닫히지 않는다', async ({ page }) => {
+  await page.route('**/api/image-list?*', (route) => {
+    const url = new URL(route.request().url())
+    url.searchParams.set('pageSize', '5')
+    return route.continue({ url: url.toString() })
+  })
+  await page.goto('/login')
+  await page.getByLabel('이메일').fill('admin@example.com')
+  await page.getByLabel('비밀번호').fill('1234')
+  await page.getByRole('button', { name: '로그인' }).click()
+  await page.waitForURL('**/review/assignments')
+  await page.goto('/data/images')
+  const rows = page.locator('tbody tr')
+  await expect(rows).toHaveCount(5)
+
+  await rows.nth(4).click()
+  const stage = page.getByTestId('lightbox-stage')
+  await expect(page.getByText('5 / 12')).toBeVisible()
+  const name = page.getByRole('dialog').getByText(/\.png$/).first()
+  const fifth = await name.textContent()
+  await page.keyboard.press('ArrowRight') // 2쪽의 첫 장
+  await expect(page.getByText('6 / 12')).toBeVisible()
+  await expect(stage).toBeVisible()
+  await expect(name).not.toHaveText(fifth!)
+  await page.keyboard.press('ArrowLeft') // 다시 1쪽의 끝
+  await expect(page.getByText('5 / 12')).toBeVisible()
+  await expect(name).toHaveText(fifth!)
+  // 마지막 장에서는 더 넘어가지 않는다
+  for (let n = 6; n <= 12; n++) {
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByText(`${n} / 12`)).toBeVisible()
+  }
+  await expect(page.getByLabel('다음', { exact: true })).toBeDisabled()
+  await page.keyboard.press('Escape')
+  await expect(stage).toBeHidden()
+  await expect(rows).toHaveCount(2) // 목록도 보고 있던 쪽(3쪽)에 있다
+})
