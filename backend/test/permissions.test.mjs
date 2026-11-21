@@ -56,7 +56,7 @@ describe('표 조회와 저장', () => {
   test('표에는 권한 3종, 메뉴, 기능 권한, 잠긴 항목이 있다', async () => {
     const r = (await api('GET', '/api/admin/permissions', admin)).body
     assert.deepEqual(r.roles.map((x) => x.code), ['admin', 'researcher', 'qa'])
-    assert.equal(r.menus.length, 12)
+    assert.equal(r.menus.length, 14) // 017: 반려 사유 분석·반려 사유 관리
     assert.ok(!r.menus.some((m) => m.path === '/data/model-runs')) // 모델 실행 이력 메뉴 제거(015)
     assert.deepEqual(r.functions.map((f) => f.code), ['assignment.manage', 'image.view_all', 'assignment.receive', 'upload.view_all'])
     assert.deepEqual(r.locked.admin, ['user.manage', 'role.manage', 'menu.manage'])

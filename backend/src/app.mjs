@@ -21,6 +21,7 @@ import userAdminRoutes from './routes/users.mjs'
 import historyRoutes from './routes/history.mjs'
 import imageListRoutes from './routes/imageList.mjs'
 import dashboardRoutes from './routes/dashboard.mjs'
+import rejectReasonRoutes from './routes/rejectReasons.mjs'
 
 export async function buildApp(opts = {}) {
   const app = Fastify({ logger: opts.logger ?? false, trustProxy: config.trustProxy })
@@ -81,6 +82,7 @@ export async function buildApp(opts = {}) {
   await app.register(userAdminRoutes, { prefix: '/api' })
   await app.register(permissionRoutes, { prefix: '/api' })
   await app.register(roleAdminRoutes, { prefix: '/api' })
+  await app.register(rejectReasonRoutes, { prefix: '/api' })
   await app.register(uploadRoutes, { prefix: '/api' })
   await app.register(fileRoutes, { prefix: '/api' })
 

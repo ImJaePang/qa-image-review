@@ -14,8 +14,8 @@ export interface TopMenu {
   groups: MenuGroup[]
 }
 
-/** 아직 화면을 만들지 않은 메뉴 경로 (DB에는 있고, 열면 준비 중 화면이 나온다) */
-export const PLACEHOLDER_PATHS: string[] = []
+/** 아직 화면을 만들지 않은 메뉴 경로 (DB에는 있고, 열면 준비 중 화면이 나온다). 017의 두 메뉴는 다음 세션에 화면을 만든다 */
+export const PLACEHOLDER_PATHS: string[] = ['/monitoring/reject-reasons', '/settings/reject-reasons']
 
 export const allLeaves = (menus: TopMenu[]) => menus.flatMap((m) => m.groups.flatMap((g) => g.items))
 
