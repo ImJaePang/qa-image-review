@@ -26,7 +26,7 @@ AI가 생성한 이미지를 사전 검증한 뒤, QA 담당자가 화면에서 
 - **파일 수신 파이프라인**: 폴더 감시 워커가 파일을 안정 판정·형식 확인 후 1장씩 추론하고, 실패 파일은 격리한다. 화면 업로드(수천 장, 재시도·일시 중지)도 같은 경로를 쓴다.
 - **사용자·권한·메뉴**: 가입 승인, 사용기한·만료 해제, 일괄 처리, 권한 종류와 권한별 메뉴·기능을 DB로 관리하고 서버가 같은 표로 API를 막는다. 로그인 시도 횟수 제한, 임시 비밀번호 발급과 변경 강제.
 - **모델 어댑터**: 호출부를 어댑터로 분리하고 출력 JSON 계약을 고정했다. 기본은 목(mock) 모델, 실제 모델(PatchCore, Anomalib)도 같은 계약으로 연결해 정답 데이터로 평가한다(이 데이터에서는 AUROC 0.683 — 연결 검증용 기준선이며 한계와 개선 후보는 [design.md](docs/design.md) 9장에 정리).
-- **테스트**: 백엔드 254개(API 통합·마이그레이션·워커 등, 전용 DB), 프론트 단위 79개, 브라우저 시나리오 12개(Playwright), 파이썬 17개.
+- **테스트**: 백엔드 265개(API 통합·마이그레이션·워커 등, 전용 DB), 프론트 단위 83개, 브라우저 시나리오 13개(Playwright), 파이썬 17개.
 
 기술: React · Vite · TypeScript · Tailwind · shadcn/ui / Node.js(Fastify) · PostgreSQL / Python(PatchCore) / Docker.
 
@@ -64,7 +64,7 @@ cd ../frontend && npm run dev                 # 화면, 포트 5173 (/api는 API
 
 ## 테스트
 ```
-cd backend && npm test      # 백엔드 테스트 254개 (API 통합, 사용자·권한·메뉴, 업로드, 수신·워커, 마이그레이션, 모델 계약·어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
+cd backend && npm test      # 백엔드 테스트 265개 (API 통합, 사용자·권한·메뉴, 업로드, 수신·워커, 마이그레이션, 모델 계약·어댑터) (DB 컨테이너 필요, 전용 DB qa_review_test를 매번 새로 만든다)
 cd frontend && npm test     # 단위 테스트 79개 (영문 코드↔한글 매핑, 페이징, 사용자·권한 문구, 업로드 전송 큐, 반려 사유 등)
 cd frontend && npx tsc -b   # 타입 체크
 cd python && .venv/Scripts/python -m unittest test_metrics test_postprocess   # 파이썬 단위 테스트 17개 (모델 없이 실행)

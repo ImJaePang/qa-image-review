@@ -6,19 +6,21 @@
 ## 현재 상태 한눈에 (2026-11-21 종료 시점)
 다음 세션은 이 절만 읽어도 이어서 할 수 있다. 자세한 근거는 [design.md](design.md), 사용법은 [guide.md](guide.md), 배포는 [deploy.md](deploy.md).
 
-**한 줄 요약**: AI 생성 이미지 QA 검수 시스템. 구현 목록(아래 1~39)은 **모두 완료**, 모든 메뉴 화면이 구현되어 '준비 중' 화면이 없다. 남은 것은 실제 서버 배포(선택)와 개선 후보뿐이다.
+**한 줄 요약**: AI 생성 이미지 QA 검수 시스템. 구현 목록 1~40 완료, **41(반려 사유 관리·분석)은 API까지 완료하고 화면 2개가 남았다** — 그 두 메뉴만 지금 '준비 중' 화면이다. 그다음은 실제 서버 배포(선택)와 개선 후보.
 
 | 항목 | 상태 |
 |---|---|
-| GitHub | https://github.com/ImJaePang/qa-image-review (공개). `c584237`까지 푸시됨. **2026-11-21 반려 사유 커밋 3개(`2d6e949`·`242e7d2`·`1ffc3c1`)는 푸시 전**(`git status -sb`로 확인) |
-| 테스트 | 백엔드 254 · 프론트 단위 79 · 화면(Playwright) 12 · 파이썬 17, 모두 통과 (명령은 README '테스트') |
+| GitHub | https://github.com/ImJaePang/qa-image-review (공개). `bb77f6a`(반려 사유 선택)까지 푸시됨. **그 뒤 커밋 3개(`534e7ef` 크게 보기, `ca58453` 반려 사유 관리·분석 API, 이 문서 정리)는 푸시 전**(`git status -sb`로 확인) |
+| 테스트 | 백엔드 265 · 프론트 단위 83 · 화면(Playwright) 13 · 파이썬 17, 모두 통과 (명령은 README '테스트') |
 | 데모 계정 | `admin@example.com`(관리자) · `qa1@example.com`(QA) / `1234` — **로컬 데모 전용**. 공개 서버는 `DEMO_MODE=false` + `ADMIN_PASSWORD`로 시작 때 정리 |
 | 모델 | 기본은 목(mock). 실제 PatchCore는 `python/README.md`, 기준선 AUROC 0.683 |
 
 **로컬에서 켜기**: 루트에서 `docker compose up -d`(DB) → `cd backend && npm run dev`(API 3000) + `npm run worker`(선택) → `cd frontend && npm run dev`(화면 5173). 또는 Docker만으로 `docker compose --profile app up -d --build`(→ http://localhost:8080). Windows가 3000을 예약해 `EACCES`면 `API_PORT=3101`을 앞에 붙인다. Docker Desktop이 꺼져 있으면 먼저 켠다.
 
-**최근 세션(2026-11-21)에서 한 일** (progress 39):
-- 반려 사유 선택(A안): `R` → 사유 상자(AI 원인 미리 선택) → 숫자키·`Enter`. 마이그레이션 016, 점검 이력에 사유 열. 개발 DB에는 `npm run migrate`로 적용함
+**최근 세션(2026-11-21)에서 한 일** (progress 39~41):
+- 반려 사유 선택(A안): `R` → 사유 상자(AI 원인 미리 선택) → 숫자키·`Enter`. 마이그레이션 016, 점검 이력에 사유 열
+- 이미지 목록 크게 보기가 쪽을 넘어도 닫히지 않음(40)
+- 반려 사유 관리·분석(41): 목업 확정(Artifact 캔버스 '반려 사유 통계·관리 목업', https://claude.ai/artifact/B3uKNfP2JkhnaZZcNrTsGV) → API·마이그레이션 017 완료. **화면은 아직**. 개발 DB에는 016·017 모두 `npm run migrate`로 적용함
 
 **그 전 세션(2026-11-14)에서 한 일** (progress 24~38):
 - 비밀번호: 임시 비밀번호 변경 강제 화면(24), 공개 서버의 초기 비밀번호 = `ADMIN_PASSWORD`(28)
@@ -33,6 +35,7 @@
 - 승인 = 문제없이 사용 가능, 반려 = 사용할 수 없음 (AI 판정이 불량이어도 사람이 보고 문제없으면 승인)
 - 필터 상태에서 결정한 이미지는 목록에서 바로 사라지지 않고 표시만 바뀐다(목업과 다름, 이유는 design.md)
 - 원인 설명 문구 7종(`lib/domain.ts`)은 확인 완료, 그대로 사용
+- 반려 사유 분석은 대시보드 카드가 아니라 별도 메뉴(모니터링 > 분석). 관리 화면에서 새로 만든 사유는 AI 원인과 연결되지 않는다(`ai_reason=false`, 미리 골라지지 않음)
 - 반려 사유는 A안(반려를 누르면 펼침, AI 원인 미리 선택). 사유 목록은 DB `reject_reasons`(AI 원인 코드와 같은 코드 + `OTHER` 기타, UNKNOWN 제외). 반려는 사유 1개 이상, 기타는 코멘트 필수
 - README는 공개용 소개, 개발 기록은 이 파일(CLAUDE.md가 이 파일을 먼저 읽게 안내)
 
@@ -45,8 +48,11 @@
 - 줄바꿈: 저장소가 `autocrlf=true`라 `LF → CRLF` 경고가 나오지만 정상이다. 파이썬으로 파일을 고칠 때 `\b` 같은 역슬래시는 원시 문자열(`r'...'`)로 쓴다(백스페이스 문자로 바뀐 적 있음)
 
 **다음에 할 수 있는 일** (우선순위 순):
-1. **실제 서버에 올려 보기** — deploy.md 6장 순서. VPS·도메인이 필요하다. 올린 뒤 인증서·로그인·업로드·재부팅 후 자동 시작·백업/복원을 확인
-2. 새 요구가 생기면 화면은 목업부터 (예: 이미지 목록 쪽 넘김 후에도 크게 보기 유지, 'AI 원인 ↔ 반려 사유' 일치율 통계, 반려 사유 관리 화면)
+1. **반려 사유 화면 2개 만들기 (41 마무리, 목업 확정됨 — 바로 구현)**. API·응답 형태는 design.md '반려 사유 관리·분석', 테스트는 `backend/test/reject-reasons.test.mjs`
+   - 설정 > 판정 > **반려 사유** (`/settings/reject-reasons`): `GET/POST /api/admin/reject-reasons`, `GET/PATCH /:code`, `POST /:code/deactivate|activate`, `DELETE /:code`, `PUT /order {codes}`. 상태 칩(사용 중/사용 안 함/전체)은 목록을 화면에서 걸러 센다. 순서는 ↑↓로 바꾸고 하단 고정 바(`변경 N건`·요약·되돌리기·순서 저장). 수정 모달은 신규/수정 겸용(코드는 신규에서만), 사용 현황·변경 이력, 왼쪽 '사용 안 함'·(가능할 때만) '삭제'. `RolesPage`/`RoleEditDialog`가 같은 정책이라 참고
+   - 모니터링 > 분석 > **반려 사유 분석** (`/monitoring/reject-reasons`): `GET /api/stats/reject-reasons?days=7|30&reviewerId=`. 기간 칩·검수자 콤보, 결과 막대(그대로/일부/전부 바꿈/없음, 이름·수치 함께), 사유별 표(채택률·적중률 막대, `기타`는 적중률 '해당 없음'), 자주 바뀐 조합
+   - 할 일: `api/index.ts`에 함수·타입, 두 페이지, `App.tsx` 라우트, `config/menu.ts`의 `PLACEHOLDER_PATHS`에서 두 경로 빼기, 사유 변경 뒤 `['reject-reasons']` 쿼리 무효화, E2E 1개씩, 문서(guide 사용법, README 테스트 개수)
+2. **실제 서버에 올려 보기** — deploy.md 6장 순서. VPS·도메인이 필요하다. 올린 뒤 인증서·로그인·업로드·재부팅 후 자동 시작·백업/복원을 확인
 3. 모델 개선·다른 모델 비교(`python/evaluate.py`로 정답과 비교), 다국어
 
 **새 세션 시작 문구**: `docs/progress.md 읽고 이어서 해줘`
@@ -123,6 +129,8 @@
 38. [x] 운영(VPS) 배포 준비: `docker-compose.prod.yml`(Caddy HTTPS 프록시, 공개 설정 고정), `deploy/Caddyfile`, `.env.production.example`, 기본 compose의 DB·앱 포트를 127.0.0.1로, deploy.md 6장(서버 올리기·운영·백업·점검표). 로컬(`DOMAIN=localhost`)에서 전체를 띄워 검증했고 **실제 서버·도메인에서는 아직 안 올려 봤다**
 
 39. [x] **반려 사유 선택** (2026-11-21): 반려(`R`)하면 사유 상자가 열리고 AI가 찾은 원인이 미리 골라져 있다. 숫자키로 고치고 `Enter` 확정·`Esc` 취소, 사유 없이는 반려 불가, `기타`는 코멘트 필수. 크게 보기에서도 같은 상자. 점검 이력에 '반려 사유' 열. 마이그레이션 016(`reject_reasons` 표, `reviews.reasons`), `GET /api/reject-reasons`. 목업(A안/B안)을 Artifact로 먼저 보여 주고 A안으로 확정
+40. [x] **이미지 목록 크게 보기가 쪽을 넘어도 유지** (2026-11-21, `534e7ef`): 쪽 끝에서 다음/이전이면 옆 쪽을 불러와 이어 본다, 위치는 전체 기준(`n / 전체`). 동작만 바뀌어 목업 생략. `lib/pagedNav.ts`(+단위 테스트), E2E는 쪽 크기를 5로 바꿔 경계를 만든다
+41. [~] **반려 사유 관리·분석** (2026-11-21): 목업 확정 → **API 완료**(`ca58453`, 마이그레이션 017, 테스트 11개) → **화면 남음**(아래 '다음에 할 수 있는 일' 1번)
 
 남은 후보(필요할 때): **실제 서버에 올려 보기**(deploy.md 6장 순서), 백업 복원 시험·자동화, 모델 개선·다른 모델 비교(평가 도구 있음), 다국어(design.md 6장).
 
